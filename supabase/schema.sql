@@ -6,7 +6,7 @@ create extension if not exists "pgcrypto";
 create extension if not exists "citext";
 
 -- Enums
-create type public.user_role as enum ('user', 'admin');
+create type public.user_role as enum ('user', 'admin', 'extern');
 create type public.event_status as enum ('planned', 'consider', 'attended', 'cancelled');
 create type public.cost_type as enum ('participant', 'booth');
 
@@ -28,7 +28,7 @@ create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   organizer text,
-  start_date date not null,
+  start_date date,
   end_date date,
   city text,
   location text,
@@ -44,7 +44,7 @@ create table if not exists public.events (
   linkedin_note text,
   attachments text[] not null default '{}'::text[],
   publication_status boolean not null default false,
-  created_by uuid references public.users(id),
+  created_by uuid references public.users(id) default public.current_app_user_id(),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
