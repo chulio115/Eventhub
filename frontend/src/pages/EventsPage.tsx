@@ -1,8 +1,9 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useEvents, type EventRow } from '../features/events/useEvents';
 import { useCreateEvent } from '../features/events/useCreateEvent';
+import { useUpdateEvent } from '../features/events/useUpdateEvent';
 
 function formatDate(value: string | null) {
   if (!value) return '';
@@ -21,7 +22,8 @@ function formatCurrency(value: number | null | undefined) {
 }
 
 export function EventsPage() {
-  const { data: events = [], isLoading, error } = useEvents();
+  const { data, isLoading, error } = useEvents();
+  const events: EventRow[] = data ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -30,9 +32,72 @@ export function EventsPage() {
   const [newStartDate, setNewStartDate] = useState('');
   const [newCostValue, setNewCostValue] = useState('');
   const createEvent = useCreateEvent();
+  const updateEvent = useUpdateEvent();
 
   const effectiveSelectedId = selectedId ?? (events[0]?.id ?? null);
   const selectedEvent: EventRow | undefined = events.find((e) => e.id === effectiveSelectedId);
+
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftStatus, setDraftStatus] = useState<EventRow['status']>('planned');
+  const [draftOrganizer, setDraftOrganizer] = useState('');
+  const [draftCity, setDraftCity] = useState('');
+  const [draftLocation, setDraftLocation] = useState('');
+  const [draftStartDate, setDraftStartDate] = useState('');
+  const [draftEndDate, setDraftEndDate] = useState('');
+  const [draftColleagues, setDraftColleagues] = useState('');
+  const [draftTags, setDraftTags] = useState('');
+  const [draftCostType, setDraftCostType] = useState<EventRow['cost_type']>('participant');
+  const [draftCostValue, setDraftCostValue] = useState('');
+  const [draftEventUrl, setDraftEventUrl] = useState('');
+  const [draftAttachments, setDraftAttachments] = useState('');
+  const [draftNotes, setDraftNotes] = useState('');
+  const [draftLinkedinPlan, setDraftLinkedinPlan] = useState(false);
+  const [draftLinkedinNote, setDraftLinkedinNote] = useState('');
+  const [draftPublicationStatus, setDraftPublicationStatus] = useState(false);
+  const [draftBooked, setDraftBooked] = useState(false);
+
+  useEffect(() => {
+    if (!selectedEvent) {
+      setDraftTitle('');
+      setDraftStatus('planned');
+      setDraftOrganizer('');
+      setDraftCity('');
+      setDraftLocation('');
+      setDraftStartDate('');
+      setDraftEndDate('');
+      setDraftColleagues('');
+      setDraftTags('');
+      setDraftCostType('participant');
+      setDraftCostValue('');
+      setDraftEventUrl('');
+      setDraftAttachments('');
+      setDraftNotes('');
+      setDraftLinkedinPlan(false);
+      setDraftLinkedinNote('');
+      setDraftPublicationStatus(false);
+      setDraftBooked(false);
+      return;
+    }
+
+    setDraftTitle(selectedEvent.title ?? '');
+    setDraftStatus(selectedEvent.status);
+    setDraftOrganizer(selectedEvent.organizer ?? '');
+    setDraftCity(selectedEvent.city ?? '');
+    setDraftLocation(selectedEvent.location ?? '');
+    setDraftStartDate(selectedEvent.start_date ?? '');
+    setDraftEndDate(selectedEvent.end_date ?? '');
+    setDraftColleagues((selectedEvent.colleagues || []).join(', '));
+    setDraftTags((selectedEvent.tags || []).join(', '));
+    setDraftCostType(selectedEvent.cost_type);
+    setDraftCostValue(String(selectedEvent.cost_value ?? ''));
+    setDraftEventUrl(selectedEvent.event_url ?? '');
+    setDraftAttachments((selectedEvent.attachments || []).join('\n'));
+    setDraftNotes(selectedEvent.notes ?? '');
+    setDraftLinkedinPlan(selectedEvent.linkedin_plan);
+    setDraftLinkedinNote(selectedEvent.linkedin_note ?? '');
+    setDraftPublicationStatus(selectedEvent.publication_status);
+    setDraftBooked(selectedEvent.booked);
+  }, [selectedEvent?.id]);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -58,6 +123,53 @@ export function EventsPage() {
       setShowCreate(false);
     } catch {
       // Fehler werden im Hook geworfen, hier können wir später noch UI-Fehlerhandling ergänzen.
+    }
+  }
+
+  async function handleSaveSelected() {
+    if (!selectedEvent) return;
+
+    const costNumeric = Number(draftCostValue.replace(',', '.')) || 0;
+
+    const colleaguesArray = draftColleagues
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const tagsArray = draftTags
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const attachmentsArray = draftAttachments
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    try {
+      await updateEvent.mutateAsync({
+        id: selectedEvent.id,
+        title: draftTitle.trim(),
+        organizer: draftOrganizer.trim() || null,
+        city: draftCity.trim() || null,
+        location: draftLocation.trim() || null,
+        start_date: draftStartDate || null,
+        end_date: draftEndDate || null,
+        status: draftStatus,
+        booked: draftBooked,
+        colleagues: colleaguesArray,
+        tags: tagsArray,
+        cost_type: draftCostType,
+        cost_value: costNumeric,
+        event_url: draftEventUrl.trim() || null,
+        notes: draftNotes.trim() || null,
+        attachments: attachmentsArray,
+        linkedin_plan: draftLinkedinPlan,
+        linkedin_note: draftLinkedinNote.trim() || null,
+        publication_status: draftPublicationStatus,
+      });
+    } catch {
+      // spätere Fehleranzeige möglich
     }
   }
 
@@ -222,55 +334,193 @@ export function EventsPage() {
 
         <div className="space-y-4">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Event-Details
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <span>Event-Management</span>
+              {selectedEvent && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-8 px-3 text-xs"
+                  onClick={handleSaveSelected}
+                  disabled={updateEvent.isPending}
+                >
+                  {updateEvent.isPending ? 'Speichere…' : 'Änderungen speichern'}
+                </Button>
+              )}
             </div>
             {selectedEvent ? (
               <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
                 <div className="space-y-3">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Veranstalter</label>
-                    <Input value={selectedEvent.organizer ?? ''} readOnly />
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Titel</label>
+                    <Input value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Veranstalter</label>
+                      <Input
+                        value={draftOrganizer}
+                        onChange={(e) => setDraftOrganizer(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Status</label>
+                      <select
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm"
+                        value={draftStatus}
+                        onChange={(e) => setDraftStatus(e.target.value as EventRow['status'])}
+                      >
+                        <option value="planned">Geplant</option>
+                        <option value="consider">In Bewertung</option>
+                        <option value="attended">Besucht</option>
+                        <option value="cancelled">Abgesagt</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-700">Startdatum</label>
-                      <Input value={formatDate(selectedEvent.start_date)} readOnly />
+                      <Input
+                        type="date"
+                        value={draftStartDate}
+                        onChange={(e) => setDraftStartDate(e.target.value)}
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-700">Enddatum</label>
-                      <Input value={formatDate(selectedEvent.end_date)} readOnly />
+                      <Input
+                        type="date"
+                        value={draftEndDate}
+                        onChange={(e) => setDraftEndDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Stadt</label>
+                      <Input
+                        value={draftCity}
+                        onChange={(e) => setDraftCity(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Location</label>
+                      <Input
+                        value={draftLocation}
+                        onChange={(e) => setDraftLocation(e.target.value)}
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Stadt</label>
-                    <Input value={selectedEvent.city ?? ''} readOnly />
+                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                      Kolleg:innen (Komma-getrennt)
+                    </label>
+                    <Input
+                      value={draftColleagues}
+                      onChange={(e) => setDraftColleagues(e.target.value)}
+                      placeholder="z. B. Yannik, Daniel"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                      Tags (z. B. Verband, Kongress)
+                    </label>
+                    <Input
+                      value={draftTags}
+                      onChange={(e) => setDraftTags(e.target.value)}
+                      placeholder="Verband, Kongress"
+                    />
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
-                      Kosten / Ticket pro Person
-                    </label>
-                    <Input value={formatCurrency(selectedEvent.cost_value)} readOnly />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        Kosten / Ticket pro Person
+                      </label>
+                      <Input
+                        value={draftCostValue}
+                        onChange={(e) => setDraftCostValue(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Kostenart</label>
+                      <select
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm"
+                        value={draftCostType}
+                        onChange={(e) =>
+                          setDraftCostType(e.target.value as EventRow['cost_type'])
+                        }
+                      >
+                        <option value="participant">Teilnehmerkosten</option>
+                        <option value="booth">Standkosten</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Status / Flags</label>
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
-                        {selectedEvent.status === 'planned'
-                          ? 'Geplant'
-                          : selectedEvent.status === 'consider'
-                            ? 'In Bewertung'
-                            : selectedEvent.status === 'attended'
-                              ? 'Besucht'
-                              : 'Abgesagt'}
-                      </span>
-                      {selectedEvent.booked && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
-                          Gebucht
-                        </span>
-                      )}
+                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                      Event-Website (URL)
+                    </label>
+                    <Input
+                      value={draftEventUrl}
+                      onChange={(e) => setDraftEventUrl(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                      Anlagen / Links (eine pro Zeile)
+                    </label>
+                    <textarea
+                      className="h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                      value={draftAttachments}
+                      onChange={(e) => setDraftAttachments(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-700">Notizen</label>
+                    <textarea
+                      className="h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                      value={draftNotes}
+                      onChange={(e) => setDraftNotes(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 text-xs text-slate-700">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                        checked={draftBooked}
+                        onChange={(e) => setDraftBooked(e.target.checked)}
+                      />
+                      <span>Gebucht</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                        checked={draftPublicationStatus}
+                        onChange={(e) => setDraftPublicationStatus(e.target.checked)}
+                      />
+                      <span>Teilnahme auf Website veröffentlichen</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                        checked={draftLinkedinPlan}
+                        onChange={(e) => setDraftLinkedinPlan(e.target.checked)}
+                      />
+                      <span>LinkedIn-Post geplant</span>
+                    </label>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        LinkedIn-Notiz / Details
+                      </label>
+                      <textarea
+                        className="h-16 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                        value={draftLinkedinNote}
+                        onChange={(e) => setDraftLinkedinNote(e.target.value)}
+                      />
                     </div>
                   </div>
                 </div>
