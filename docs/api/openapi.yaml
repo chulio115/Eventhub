@@ -1,0 +1,6 @@
+openapi: 3.0.3
+info:
+  title: EventHub API
+  version: 0.1.0
+  description: Basis-OpenAPI-Spec für EventHub (wird später weiter ausgearbeitet).
+paths: {}
