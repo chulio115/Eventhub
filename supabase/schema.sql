@@ -136,25 +136,29 @@ alter table public.event_history enable row level security;
 alter table public.share_tokens enable row level security;
 
 -- RLS Policies: users
-create policy if not exists "Users can view own profile"
+drop policy if exists "Users can view own profile" on public.users;
+create policy "Users can view own profile"
   on public.users
   for select
   using (external_id = auth.uid());
 
-create policy if not exists "Users can update own profile"
+drop policy if exists "Users can update own profile" on public.users;
+create policy "Users can update own profile"
   on public.users
   for update
   using (external_id = auth.uid())
   with check (external_id = auth.uid());
 
-create policy if not exists "Admins can manage all users"
+drop policy if exists "Admins can manage all users" on public.users;
+create policy "Admins can manage all users"
   on public.users
   for all
   using (public.current_app_user_role() = 'admin')
   with check (public.current_app_user_role() = 'admin');
 
 -- RLS Policies: events
-create policy if not exists "Users can view own events or admins all"
+drop policy if exists "Users can view own events or admins all" on public.events;
+create policy "Users can view own events or admins all"
   on public.events
   for select
   using (
@@ -165,7 +169,8 @@ create policy if not exists "Users can view own events or admins all"
     )
   );
 
-create policy if not exists "Users can insert events for themselves"
+drop policy if exists "Users can insert events for themselves" on public.events;
+create policy "Users can insert events for themselves"
   on public.events
   for insert
   with check (
@@ -176,7 +181,8 @@ create policy if not exists "Users can insert events for themselves"
     )
   );
 
-create policy if not exists "Users can update own events or admins all"
+drop policy if exists "Users can update own events or admins all" on public.events;
+create policy "Users can update own events or admins all"
   on public.events
   for update
   using (
@@ -194,13 +200,15 @@ create policy if not exists "Users can update own events or admins all"
     )
   );
 
-create policy if not exists "Admins can delete events"
+drop policy if exists "Admins can delete events" on public.events;
+create policy "Admins can delete events"
   on public.events
   for delete
   using (public.current_app_user_role() = 'admin');
 
 -- RLS Policies: event_history
-create policy if not exists "Users can view history for own events or admins all"
+drop policy if exists "Users can view history for own events or admins all" on public.event_history;
+create policy "Users can view history for own events or admins all"
   on public.event_history
   for select
   using (
@@ -213,7 +221,8 @@ create policy if not exists "Users can view history for own events or admins all
     )
   );
 
-create policy if not exists "Users can insert history for own events or admins all"
+drop policy if exists "Users can insert history for own events or admins all" on public.event_history;
+create policy "Users can insert history for own events or admins all"
   on public.event_history
   for insert
   with check (
@@ -227,7 +236,8 @@ create policy if not exists "Users can insert history for own events or admins a
   );
 
 -- RLS Policies: share_tokens
-create policy if not exists "Users can manage share tokens for own events or admins all"
+drop policy if exists "Users can manage share tokens for own events or admins all" on public.share_tokens;
+create policy "Users can manage share tokens for own events or admins all"
   on public.share_tokens
   for all
   using (

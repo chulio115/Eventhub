@@ -1,0 +1,12 @@
+[build]
+  command = "cd frontend && npm install && npm run build"
+  publish = "frontend/dist"
+
+[functions]
+  directory = "functions"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  framework = "vite"
+  autoLaunch = false
