@@ -45,9 +45,17 @@ export function useUpdateEvent() {
         throw error;
       }
 
-      return data;
+      return { id, ...patch };
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['events'], (old) => {
+        if (!old) return old;
+
+        return (old as any[]).map((event) =>
+          (event as any).id === updated.id ? { ...event, ...updated } : event,
+        );
+      });
+
       queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });

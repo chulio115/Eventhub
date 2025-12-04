@@ -21,11 +21,43 @@ function formatCurrency(value: number | null | undefined) {
   }).format(value);
 }
 
+type UiStatus = 'bewertung' | 'geplant' | 'gebucht' | 'abgesagt';
+type StatusFilter = 'all' | UiStatus;
+
+function mapToUiStatus(status: EventRow['status'], booked: boolean): UiStatus {
+  if (status === 'cancelled') return 'abgesagt';
+  if (status === 'attended') return 'gebucht';
+  if (booked) return 'gebucht';
+  if (status === 'consider') return 'bewertung';
+  return 'geplant';
+}
+
+function mapFromUiStatus(ui: UiStatus): { status: EventRow['status']; booked: boolean } {
+  switch (ui) {
+    case 'bewertung':
+      return { status: 'consider', booked: false };
+    case 'geplant':
+      return { status: 'planned', booked: false };
+    case 'gebucht':
+      return { status: 'attended', booked: true };
+    case 'abgesagt':
+      return { status: 'cancelled', booked: false };
+    default:
+      return { status: 'planned', booked: false };
+  }
+}
+
 export function EventsPage() {
   const { data, isLoading, error } = useEvents();
   const events: EventRow[] = data ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [organizerFilter, setOrganizerFilter] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [colleagueFilter, setColleagueFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newCity, setNewCity] = useState('');
   const [newOrganizer, setNewOrganizer] = useState('');
@@ -33,9 +65,6 @@ export function EventsPage() {
   const [newCostValue, setNewCostValue] = useState('');
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
-
-  const effectiveSelectedId = selectedId ?? (events[0]?.id ?? null);
-  const selectedEvent: EventRow | undefined = events.find((e) => e.id === effectiveSelectedId);
 
   const [draftTitle, setDraftTitle] = useState('');
   const [draftStatus, setDraftStatus] = useState<EventRow['status']>('planned');
@@ -55,6 +84,75 @@ export function EventsPage() {
   const [draftLinkedinNote, setDraftLinkedinNote] = useState('');
   const [draftPublicationStatus, setDraftPublicationStatus] = useState(false);
   const [draftBooked, setDraftBooked] = useState(false);
+
+  const draftUiStatus = mapToUiStatus(draftStatus, draftBooked);
+
+  const organizerOptions = Array.from(
+    new Set(events.map((e) => e.organizer).filter((v): v is string => Boolean(v))),
+  ).sort((a, b) => a.localeCompare(b, 'de-DE'));
+
+  const cityOptions = Array.from(
+    new Set(events.map((e) => e.city).filter((v): v is string => Boolean(v))),
+  ).sort((a, b) => a.localeCompare(b, 'de-DE'));
+
+  const colleagueSet = new Set<string>();
+  events.forEach((e) => {
+    (e.colleagues || []).forEach((c) => {
+      if (c) colleagueSet.add(c);
+    });
+  });
+  const colleagueOptions = Array.from(colleagueSet).sort((a, b) => a.localeCompare(b, 'de-DE'));
+
+  const tagSet = new Set<string>();
+  events.forEach((e) => {
+    (e.tags || []).forEach((t) => {
+      if (t) tagSet.add(t);
+    });
+  });
+  const tagOptions = Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'de-DE'));
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const filteredEvents = events.filter((event) => {
+    const uiStatus = mapToUiStatus(event.status, event.booked);
+
+    if (statusFilter !== 'all' && uiStatus !== statusFilter) {
+      return false;
+    }
+
+    if (normalizedSearch) {
+      const haystack = [
+        event.title,
+        event.city,
+        event.organizer,
+        (event.colleagues || []).join(' '),
+        (event.tags || []).join(' '),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      if (!haystack.includes(normalizedSearch)) {
+        return false;
+      }
+    }
+
+    if (organizerFilter && event.organizer !== organizerFilter) return false;
+    if (cityFilter && event.city !== cityFilter) return false;
+    if (colleagueFilter && !(event.colleagues || []).includes(colleagueFilter)) return false;
+    if (tagFilter && !(event.tags || []).includes(tagFilter)) return false;
+
+    return true;
+  });
+
+  const effectiveSelectedId =
+    selectedId && filteredEvents.some((e) => e.id === selectedId)
+      ? selectedId
+      : filteredEvents[0]?.id ?? null;
+
+  const selectedEvent: EventRow | undefined = events.find(
+    (e) => e.id === effectiveSelectedId,
+  );
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -174,12 +272,25 @@ export function EventsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 w-full flex-col space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-1 items-center gap-3">
-          <Input placeholder="Suche in Titel, Ort, Veranstalter" className="max-w-md" />
-          <select className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm">
-            <option>Alle Stati</option>
+          <Input
+            placeholder="Suche in Titel, Ort, Veranstalter"
+            className="max-w-md"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          >
+            <option value="all">Alle Stati</option>
+            <option value="bewertung">Bewertung</option>
+            <option value="geplant">Geplant</option>
+            <option value="gebucht">Gebucht</option>
+            <option value="abgesagt">Abgesagt</option>
           </select>
         </div>
         <Button type="button" onClick={() => setShowCreate((v) => !v)}>
@@ -241,19 +352,63 @@ export function EventsPage() {
         </form>
       )}
 
-      <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">Alle Veranstalter</span>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">Alle Orte</span>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">Alle Kolleg:innen</span>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">Alle Tags</span>
+      <div className="flex flex-wrap gap-3 text-xs text-slate-600">
+        <select
+          className="h-8 min-w-[11rem] rounded-full border border-slate-200 bg-white px-3 pr-8 text-xs font-medium text-slate-700 shadow-sm"
+          value={organizerFilter}
+          onChange={(e) => setOrganizerFilter(e.target.value)}
+        >
+          <option value="">Alle Veranstalter</option>
+          {organizerOptions.map((organizer) => (
+            <option key={organizer} value={organizer}>
+              {organizer}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-8 min-w-[9rem] rounded-full border border-slate-200 bg-white px-3 pr-8 text-xs font-medium text-slate-700 shadow-sm"
+          value={cityFilter}
+          onChange={(e) => setCityFilter(e.target.value)}
+        >
+          <option value="">Alle Orte</option>
+          {cityOptions.map((city) => (
+            <option key={city} value={city}>
+              {city}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-8 min-w-[11rem] rounded-full border border-slate-200 bg-white px-3 pr-8 text-xs font-medium text-slate-700 shadow-sm"
+          value={colleagueFilter}
+          onChange={(e) => setColleagueFilter(e.target.value)}
+        >
+          <option value="">Alle Kolleg:innen</option>
+          {colleagueOptions.map((colleague) => (
+            <option key={colleague} value={colleague}>
+              {colleague}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-8 min-w-[9rem] rounded-full border border-slate-200 bg-white px-3 pr-8 text-xs font-medium text-slate-700 shadow-sm"
+          value={tagFilter}
+          onChange={(e) => setTagFilter(e.target.value)}
+        >
+          <option value="">Alle Tags</option>
+          {tagOptions.map((tag) => (
+            <option key={tag} value={tag}>
+              {tag}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Events (Liste)
           </div>
-          <div className="divide-y divide-slate-100 text-sm">
+          <div className="divide-y divide-slate-100 text-sm flex-1 overflow-y-auto">
             {isLoading && (
               <div className="px-4 py-3 text-xs text-slate-400">Lade Events…</div>
             )}
@@ -263,64 +418,87 @@ export function EventsPage() {
             {!isLoading && !error && events.length === 0 && (
               <div className="px-4 py-3 text-xs text-slate-400">Keine Events vorhanden.</div>
             )}
+            {!isLoading && !error && events.length > 0 && filteredEvents.length === 0 && (
+              <div className="px-4 py-3 text-xs text-slate-400">
+                Keine Events für die aktuellen Filter.
+              </div>
+            )}
             {!isLoading && !error &&
-              events.map((event) => {
+              filteredEvents.map((event) => {
                 const isSelected = selectedEvent?.id === event.id;
+                const uiStatus = mapToUiStatus(event.status, event.booked);
 
                 let statusLabel = '';
                 let statusClasses = '';
 
-                if (event.booked) {
-                  statusLabel = 'Gebucht';
-                  statusClasses = 'bg-emerald-50 text-emerald-700';
-                } else {
-                  switch (event.status) {
-                    case 'planned':
-                      statusLabel = 'Geplant';
-                      statusClasses = 'bg-sky-50 text-sky-700';
-                      break;
-                    case 'consider':
-                      statusLabel = 'In Bewertung';
-                      statusClasses = 'bg-amber-50 text-amber-700';
-                      break;
-                    case 'attended':
-                      statusLabel = 'Besucht';
-                      statusClasses = 'bg-emerald-50 text-emerald-700';
-                      break;
-                    case 'cancelled':
-                      statusLabel = 'Abgesagt';
-                      statusClasses = 'bg-rose-50 text-rose-700';
-                      break;
-                    default:
-                      statusLabel = event.status;
-                      statusClasses = 'bg-slate-100 text-slate-700';
-                  }
+                switch (uiStatus) {
+                  case 'bewertung':
+                    statusLabel = 'Bewertung';
+                    statusClasses = 'border-amber-100 bg-amber-50 text-amber-700';
+                    break;
+                  case 'geplant':
+                    statusLabel = 'Geplant';
+                    statusClasses = 'border-sky-100 bg-sky-50 text-sky-700';
+                    break;
+                  case 'gebucht':
+                    statusLabel = 'Gebucht';
+                    statusClasses = 'border-emerald-200 bg-emerald-50 text-emerald-700';
+                    break;
+                  case 'abgesagt':
+                    statusLabel = 'Abgesagt';
+                    statusClasses = 'border-rose-100 bg-rose-50 text-rose-700';
+                    break;
+                  default:
+                    statusLabel = '';
+                    statusClasses = 'border-slate-200 bg-slate-100 text-slate-700';
                 }
+
+                const basePillClasses =
+                  'inline-flex items-center rounded-full border px-3 py-0.5 text-xs font-semibold';
+
+                const colleaguesLabel = (event.colleagues || []).join(', ');
+                const metaLine = [colleaguesLabel, event.city, event.organizer]
+                  .filter(Boolean)
+                  .join(' · ');
 
                 return (
                   <button
                     key={event.id}
                     type="button"
                     onClick={() => setSelectedId(event.id)}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
-                      isSelected ? 'bg-slate-900 text-white hover:bg-slate-900' : ''
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                      isSelected
+                        ? 'bg-slate-900 text-white hover:bg-slate-900'
+                        : 'hover:bg-slate-50'
                     }`}
                   >
-                    <div className="w-24 text-xs text-slate-500">
+                    <div
+                      className={`w-24 text-xs ${
+                        isSelected ? 'text-slate-300' : 'text-slate-500'
+                      }`}
+                    >
                       {formatDate(event.start_date) || 'kein Datum'}
                     </div>
                     <div className="flex-1">
-                      <div className="font-medium text-slate-900 dark:text-slate-50">
+                      <div
+                        className={`font-medium ${
+                          isSelected ? 'text-white' : 'text-slate-900 dark:text-slate-50'
+                        }`}
+                      >
                         {event.title}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {[event.city, event.organizer].filter(Boolean).join(' · ')}
+                      <div
+                        className={`text-xs ${
+                          isSelected ? 'text-slate-300' : 'text-slate-500'
+                        }`}
+                      >
+                        {metaLine}
                       </div>
                     </div>
                     {statusLabel && (
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClasses} ${
-                          isSelected ? 'bg-white/10 text-white' : ''
+                        className={`${basePillClasses} ${statusClasses} ${
+                          isSelected ? 'ring-1 ring-white/40' : ''
                         }`}
                       >
                         {statusLabel}
@@ -332,8 +510,8 @@ export function EventsPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="space-y-4 flex flex-col">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex-1">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <span>Event-Management</span>
               {selectedEvent && (
@@ -367,13 +545,17 @@ export function EventsPage() {
                       <label className="mb-1 block text-xs font-medium text-slate-700">Status</label>
                       <select
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm"
-                        value={draftStatus}
-                        onChange={(e) => setDraftStatus(e.target.value as EventRow['status'])}
+                        value={draftUiStatus}
+                        onChange={(e) => {
+                          const mapped = mapFromUiStatus(e.target.value as UiStatus);
+                          setDraftStatus(mapped.status);
+                          setDraftBooked(mapped.booked);
+                        }}
                       >
-                        <option value="planned">Geplant</option>
-                        <option value="consider">In Bewertung</option>
-                        <option value="attended">Besucht</option>
-                        <option value="cancelled">Abgesagt</option>
+                        <option value="bewertung">Bewertung</option>
+                        <option value="geplant">Geplant</option>
+                        <option value="gebucht">Gebucht</option>
+                        <option value="abgesagt">Abgesagt</option>
                       </select>
                     </div>
                   </div>
@@ -485,15 +667,6 @@ export function EventsPage() {
                     />
                   </div>
                   <div className="space-y-2 text-xs text-slate-700">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-                        checked={draftBooked}
-                        onChange={(e) => setDraftBooked(e.target.checked)}
-                      />
-                      <span>Gebucht</span>
-                    </label>
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"

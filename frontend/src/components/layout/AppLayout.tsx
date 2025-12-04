@@ -30,7 +30,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <Link to="/events" className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-6">
+      <main className="mx-auto flex min-h-0 flex-1 max-w-7xl px-6 py-6">
         {children}
       </main>
     </div>
