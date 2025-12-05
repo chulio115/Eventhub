@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import { useTheme } from '../../features/theme/ThemeProvider';
+import toast from 'react-hot-toast';
 
 const navItems = [
   { to: '/events', label: 'Events', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
@@ -20,10 +21,43 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { profile, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
+  }
+
+  async function handleSetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    
+    if (newPassword.length < 6) {
+      toast.error('Passwort muss mindestens 6 Zeichen haben');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwörter stimmen nicht überein');
+      return;
+    }
+
+    setIsSettingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      
+      toast.success('Passwort erfolgreich gesetzt!');
+      setShowPasswordModal(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Fehler beim Setzen des Passworts');
+    } finally {
+      setIsSettingPassword(false);
+    }
   }
 
   const showChrome = !location.pathname.startsWith('/share/');
@@ -127,6 +161,16 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </span>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(true)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                  title="Passwort setzen"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -236,6 +280,82 @@ export function AppLayout({ children }: AppLayoutProps) {
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
         {children}
       </main>
+
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowPasswordModal(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Passwort setzen</h3>
+              <button
+                type="button"
+                onClick={() => setShowPasswordModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
+              Setze ein Passwort, um dich künftig mit E-Mail und Passwort anzumelden.
+            </p>
+            <form onSubmit={handleSetPassword} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Neues Passwort
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mindestens 6 Zeichen"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Passwort bestätigen
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Passwort wiederholen"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                  disabled={isSettingPassword}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSettingPassword}
+                  className="rounded-lg bg-gradient-to-r from-violet-500 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md hover:from-violet-600 hover:to-indigo-700 disabled:opacity-60"
+                >
+                  {isSettingPassword ? 'Speichere…' : 'Passwort speichern'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
