@@ -10,6 +10,7 @@ import { useDeleteEvent } from '../features/events/useDeleteEvent';
 import { useEventHistory, useAddHistoryEntry } from '../features/events/useEventHistory';
 import { useUploadEventFile } from '../features/events/useUploadEventFile';
 import { useDeleteHistoryEntry } from '../features/events/useDeleteHistoryEntry';
+import { useSendInvite } from '../features/events/useSendInvite';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUsers } from '../features/users/useUsers';
 
@@ -334,6 +335,7 @@ export function EventsPage() {
   
   // Nutzer für Einladungen laden
   const { data: allUsers = [] } = useUsers();
+  const sendInvite = useSendInvite();
 
   // Schließe Kalender-Menü bei Klick außerhalb
   useEffect(() => {
@@ -1787,6 +1789,7 @@ export function EventsPage() {
                 Abbrechen
               </Button>
               <Button
+                disabled={sendInvite.isPending}
                 onClick={() => {
                   const emails: string[] = [];
                   selectedUserIds.forEach((userId) => {
@@ -1800,14 +1803,41 @@ export function EventsPage() {
                     toast.error('Bitte wähle mindestens einen Empfänger aus');
                     return;
                   }
-                  const mailtoUrl = generateCalendarEmail(selectedEvent, emails.join(','));
-                  window.open(mailtoUrl, '_blank');
-                  downloadICS(selectedEvent);
-                  toast.success(`Einladung an ${emails.length} Empfänger vorbereitet`);
-                  setShowInviteModal(false);
+                  
+                  // Versuche E-Mail über Edge Function zu senden
+                  sendInvite.mutate(
+                    {
+                      to: emails,
+                      event: {
+                        id: selectedEvent.id,
+                        title: selectedEvent.title,
+                        start_date: selectedEvent.start_date,
+                        end_date: selectedEvent.end_date,
+                        location: selectedEvent.location,
+                        city: selectedEvent.city,
+                        organizer: selectedEvent.organizer,
+                        event_url: selectedEvent.event_url,
+                      },
+                      senderName: profile?.name || profile?.email || 'EventHub',
+                    },
+                    {
+                      onSuccess: () => {
+                        setShowInviteModal(false);
+                        setSelectedUserIds([]);
+                        setInviteEmail('');
+                      },
+                      onError: () => {
+                        // Fallback auf mailto
+                        const mailtoUrl = generateCalendarEmail(selectedEvent, emails.join(','));
+                        window.open(mailtoUrl, '_blank');
+                        downloadICS(selectedEvent);
+                        setShowInviteModal(false);
+                      },
+                    }
+                  );
                 }}
               >
-                Einladung senden
+                {sendInvite.isPending ? 'Sende...' : 'Einladung senden'}
               </Button>
             </div>
           </div>

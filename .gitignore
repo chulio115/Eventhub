@@ -20,3 +20,17 @@ yarn-error.log*
 # IDE
 .vscode
 .idea
+
+# Supabase Secrets
+supabase/.env
+supabase/.env.*
+.supabase
+supabase/.temp
+**/secrets.json
+**/secrets.*.json
+**/*secret*
+**/*SECRET*
+
+# API Keys (safety net)
+*.key
+*.pem
