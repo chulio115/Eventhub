@@ -23,7 +23,7 @@ export function UserManagementPage() {
     }
   }
 
-  async function handleRoleChange(userId: string, newRole: 'admin' | 'user' | 'extern') {
+  async function handleRoleChange(userId: string, newRole: 'admin' | 'user') {
     try {
       await updateRole.mutateAsync({ id: userId, role: newRole });
       toast.success('Rolle wurde aktualisiert');
@@ -39,7 +39,7 @@ export function UserManagementPage() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Benutzerverwaltung</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Nutzer:innen verwalten und Rollen (Admin, User, Extern) setzen.
+          Nutzer:innen verwalten und Rollen zuweisen.
         </p>
       </div>
 
@@ -115,18 +115,15 @@ export function UserManagementPage() {
                     <select
                       className={`h-8 rounded-full border px-3 text-xs font-medium shadow-sm transition-colors ${
                         u.role === 'admin'
-                          ? 'border-brand/30 bg-brand/10 text-brand'
-                          : u.role === 'extern'
-                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          ? 'border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
                           : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
                       }`}
                       value={u.role}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value as 'admin' | 'user' | 'extern')}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value as 'admin' | 'user')}
                       disabled={updateRole.isPending || isSelf}
                     >
                       <option value="admin">Admin</option>
                       <option value="user">User</option>
-                      <option value="extern">Extern</option>
                     </select>
                   </div>
 
@@ -157,23 +154,27 @@ export function UserManagementPage() {
       {/* Rollen-Erklärung */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
         <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Rollen-Übersicht</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg bg-brand/5 p-3">
-            <div className="mb-1 text-xs font-semibold text-brand">Admin</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg bg-violet-50 p-3 dark:bg-violet-900/20">
+            <div className="mb-1 flex items-center gap-2">
+              <svg className="h-4 w-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">Admin</span>
+            </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Vollzugriff auf alle Events, Benutzer verwalten, Einstellungen ändern
+              Vollzugriff auf alle Events, Benutzer verwalten, alle Daten exportieren
             </p>
           </div>
           <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-            <div className="mb-1 text-xs font-semibold text-slate-700 dark:text-slate-200">User</div>
+            <div className="mb-1 flex items-center gap-2">
+              <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">User</span>
+            </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Eigene Events erstellen und bearbeiten, alle Events sehen
-            </p>
-          </div>
-          <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-            <div className="mb-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Extern</div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Eingeschränkter Lesezugriff, keine Bearbeitung möglich
+              Eigene Events erstellen und bearbeiten, alle Events einsehen
             </p>
           </div>
         </div>

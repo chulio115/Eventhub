@@ -19,6 +19,80 @@ function copyEventLink(eventId: string) {
   });
 }
 
+// ICS-Datei für Kalender-Einladung generieren
+function generateICS(event: EventRow): string {
+  const formatICSDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+
+  const startDate = formatICSDate(event.start_date);
+  const endDate = formatICSDate(event.end_date) || startDate;
+  const location = [event.location, event.city].filter(Boolean).join(', ');
+  const description = [
+    `Veranstalter: ${event.organizer || 'N/A'}`,
+    event.event_url ? `Website: ${event.event_url}` : '',
+    event.notes ? `Notizen: ${event.notes}` : '',
+  ].filter(Boolean).join('\\n');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//EventHub//DE',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${event.id}@eventhub`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+    `DTSTART:${startDate}`,
+    `DTEND:${endDate}`,
+    `SUMMARY:${event.title}`,
+    location ? `LOCATION:${location}` : '',
+    `DESCRIPTION:${description}`,
+    `ORGANIZER:${event.organizer || ''}`,
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+}
+
+function downloadICS(event: EventRow) {
+  const ics = generateICS(event);
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast.success('Kalender-Datei heruntergeladen');
+}
+
+function openOutlookWeb(event: EventRow) {
+  const startDate = event.start_date ? new Date(event.start_date).toISOString() : '';
+  const endDate = event.end_date ? new Date(event.end_date).toISOString() : startDate;
+  const location = [event.location, event.city].filter(Boolean).join(', ');
+  const body = [
+    `Veranstalter: ${event.organizer || 'N/A'}`,
+    event.event_url ? `Website: ${event.event_url}` : '',
+    event.notes ? `Notizen: ${event.notes}` : '',
+  ].filter(Boolean).join('\n');
+
+  const params = new URLSearchParams({
+    subject: event.title,
+    startdt: startDate,
+    enddt: endDate,
+    location: location,
+    body: body,
+    path: '/calendar/action/compose',
+  });
+
+  window.open(`https://outlook.office.com/calendar/0/deeplink/compose?${params.toString()}`, '_blank');
+}
+
 function formatDate(value: string | null) {
   if (!value) return '';
   const date = new Date(value);
@@ -125,6 +199,39 @@ export function EventsPage() {
   const [draftBooked, setDraftBooked] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const rightColRef = useRef<HTMLDivElement | null>(null);
+  const calendarMenuRef = useRef<HTMLDivElement | null>(null);
+  const [rightColHeight, setRightColHeight] = useState<number | null>(null);
+  const [showCalendarMenu, setShowCalendarMenu] = useState(false);
+
+  // Schließe Kalender-Menü bei Klick außerhalb
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (calendarMenuRef.current && !calendarMenuRef.current.contains(e.target as Node)) {
+        setShowCalendarMenu(false);
+      }
+    };
+    if (showCalendarMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showCalendarMenu]);
+
+  // Messe die Höhe der rechten Box
+  useEffect(() => {
+    if (rightColRef.current) {
+      const updateHeight = () => {
+        if (rightColRef.current) {
+          setRightColHeight(rightColRef.current.offsetHeight);
+        }
+      };
+      updateHeight();
+      // ResizeObserver für dynamische Änderungen
+      const resizeObserver = new ResizeObserver(updateHeight);
+      resizeObserver.observe(rightColRef.current);
+      return () => resizeObserver.disconnect();
+    }
+  }, [selectedId]);
 
   const draftUiStatus = mapToUiStatus(draftStatus, draftBooked);
 
@@ -548,7 +655,7 @@ export function EventsPage() {
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-col space-y-4">
+    <div className="w-full space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-1 items-center gap-3">
           <Input
@@ -691,13 +798,13 @@ export function EventsPage() {
         </select>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" style={{ maxHeight: 'calc(100vh - 12rem)' }}>
-        {/* Linke Spalte: Event-Liste */}
-        <div className="flex max-h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Events (Liste)
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        {/* Linke Spalte: Event-Liste - Höhe passt sich der rechten Box an */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm self-start" style={{ height: rightColHeight ? `${rightColHeight}px` : 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Events ({filteredEvents.length})
           </div>
-          <div className="divide-y divide-slate-100 text-sm flex-1 overflow-y-auto">
+          <div className="divide-y divide-slate-100 overflow-y-auto text-sm">
             {isLoading && (
               <div className="px-4 py-3 text-xs text-slate-400">Lade Events…</div>
             )}
@@ -804,9 +911,8 @@ export function EventsPage() {
         </div>
 
         {/* Rechte Spalte: Event-Management */}
-        <div className="flex flex-col space-y-4">
-          <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div ref={rightColRef} className="rounded-2xl border border-slate-200 bg-white shadow-sm self-start">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <div className="flex items-center gap-3">
                 <span>Event-Management</span>
                 {selectedEvent && (
@@ -854,6 +960,56 @@ export function EventsPage() {
                       <line x1="12" y1="2" x2="12" y2="15" />
                     </svg>
                   </button>
+                  {/* Kalender-Einladung Button mit Dropdown */}
+                  <div ref={calendarMenuRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowCalendarMenu(!showCalendarMenu)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-200 bg-white text-sky-500 shadow-sm transition-colors hover:bg-sky-50 hover:text-sky-600"
+                      title="Kalender-Einladung erstellen"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                        <line x1="12" y1="14" x2="12" y2="18" />
+                        <line x1="10" y1="16" x2="14" y2="16" />
+                      </svg>
+                    </button>
+                    {showCalendarMenu && (
+                      <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            downloadICS(selectedEvent);
+                            setShowCalendarMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          ICS-Datei herunterladen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openOutlookWeb(selectedEvent);
+                            setShowCalendarMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-sky-500" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.13V2.55q0-.44.3-.75.3-.3.7-.3h15.12q.44 0 .75.3.3.3.3.75V12zm-8.95 0q-.41-.68-1-1.03-.6-.35-1.4-.35-.89 0-1.55.33-.66.34-1.1.92-.44.58-.67 1.36-.22.77-.22 1.64 0 .88.2 1.66.2.79.65 1.38.44.58 1.11.92.68.33 1.56.33.67 0 1.25-.24.58-.24 1.02-.66.43-.42.7-.98.28-.57.35-1.23H12.6q0 .38-.12.64-.12.26-.35.43-.23.17-.56.25-.32.08-.72.08-.59 0-1-.17-.41-.17-.68-.49-.27-.32-.4-.76-.12-.44-.12-.98 0-.52.13-.97.13-.46.4-.79.28-.33.68-.51.4-.17.98-.17.58 0 .94.18.36.18.57.52zM2 8.39v6.83H6V8.39zm15.3 6.23q.42 0 .81-.1.39-.1.72-.29.33-.2.57-.5.25-.31.36-.74H16.1q0 .39.15.67.17.29.42.48.26.19.6.29.32.1.66.1h0zM19.08 6v.61h-2.66V6zm-1.33 1.91v.61h-1.33v-.61zm1.33 1.91v.61h-2.66v-.61z"/>
+                          </svg>
+                          Outlook Web öffnen
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(selectedEvent.id)}
@@ -880,7 +1036,7 @@ export function EventsPage() {
                 </div>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div>
               {selectedEvent ? (
                 <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
                   <div className="space-y-3">
@@ -1146,7 +1302,6 @@ export function EventsPage() {
                 </div>
               )}
             </div>
-          </div>
         </div>
       </div>
 

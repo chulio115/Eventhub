@@ -73,7 +73,7 @@ export function CalendarPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>('year');
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
   const [selectedEvent, setSelectedEvent] = useState<EventRow | null>(null);
 
@@ -92,6 +92,7 @@ export function CalendarPage() {
 
   const yearOptionSet = new Set<number>(eventsWithDate.map((e) => e.year));
   yearOptionSet.add(currentYear);
+  yearOptionSet.add(2026); // 2026 immer als Option hinzufügen
   const yearOptions = Array.from(yearOptionSet).sort((a, b) => a - b);
 
   const eventsForYear = eventsWithDate.filter((item) => item.year === selectedYear);
