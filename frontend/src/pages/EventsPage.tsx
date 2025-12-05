@@ -11,6 +11,7 @@ import { useEventHistory, useAddHistoryEntry } from '../features/events/useEvent
 import { useUploadEventFile } from '../features/events/useUploadEventFile';
 import { useDeleteHistoryEntry } from '../features/events/useDeleteHistoryEntry';
 import { useAuth } from '../features/auth/AuthContext';
+import { useUsers } from '../features/users/useUsers';
 
 function copyEventLink(eventId: string) {
   const url = `${window.location.origin}/events?id=${eventId}`;
@@ -21,49 +22,83 @@ function copyEventLink(eventId: string) {
   });
 }
 
+// EventHub App URL
+function getAppUrl() {
+  return import.meta.env.VITE_APP_URL || window.location.origin;
+}
+
 // ICS-Datei für Kalender-Einladung generieren
 function generateICS(event: EventRow): string {
   const formatICSDate = (dateStr: string | null) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
-    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    // Ganztägige Events: nur Datum ohne Zeit
+    return d.toISOString().slice(0, 10).replace(/-/g, '');
   };
 
   const startDate = formatICSDate(event.start_date);
   const endDate = formatICSDate(event.end_date) || startDate;
   const location = [event.location, event.city].filter(Boolean).join(', ');
+  const eventHubLink = `${getAppUrl()}/events?id=${event.id}`;
   
-  // EventHub-Link zur Beschreibung hinzufügen
-  const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-  const eventHubLink = `${appUrl}/events?id=${event.id}`;
-  
-  const description = [
+  // ICS erfordert spezielle Escaping: Backslash-n für Zeilenumbrüche
+  const descriptionParts = [
     `Veranstalter: ${event.organizer || 'N/A'}`,
     event.event_url ? `Website: ${event.event_url}` : '',
-    `\\n📋 Im EventHub öffnen: ${eventHubLink}`,
-    event.notes ? `\\nNotizen: ${event.notes}` : '',
-  ].filter(Boolean).join('\\n');
+    '',
+    `Im EventHub öffnen: ${eventHubLink}`,
+    event.notes ? `Notizen: ${event.notes.replace(/\n/g, ' ')}` : '',
+  ].filter((p) => p !== undefined);
+  
+  const description = descriptionParts.join('\\n');
 
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//EventHub//DE',
     'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
+    'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${event.id}@eventhub`,
     `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
-    `DTSTART:${startDate}`,
-    `DTEND:${endDate}`,
-    `SUMMARY:${event.title}`,
-    location ? `LOCATION:${location}` : '',
+    `DTSTART;VALUE=DATE:${startDate}`,
+    `DTEND;VALUE=DATE:${endDate}`,
+    `SUMMARY:${event.title.replace(/[,;]/g, ' ')}`,
+    location ? `LOCATION:${location.replace(/[,;]/g, ' ')}` : '',
     `DESCRIPTION:${description}`,
     `URL:${eventHubLink}`,
-    `ORGANIZER:${event.organizer || ''}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',
     'END:VCALENDAR',
   ].filter(Boolean).join('\r\n');
+}
+
+// E-Mail-Einladung generieren
+function generateCalendarEmail(event: EventRow, recipientEmail: string): string {
+  const eventHubLink = `${getAppUrl()}/events?id=${event.id}`;
+  const dateStr = event.start_date 
+    ? new Date(event.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
+    : 'Datum folgt';
+  const locationStr = [event.location, event.city].filter(Boolean).join(', ') || 'Ort folgt';
+  
+  const subject = encodeURIComponent(`Kalendereinladung: ${event.title}`);
+  const body = encodeURIComponent(
+`Hallo,
+
+du wurdest zu folgendem Event eingeladen:
+
+📅 ${event.title}
+📆 ${dateStr}
+📍 ${locationStr}
+🏢 Veranstalter: ${event.organizer || 'N/A'}
+${event.event_url ? `🔗 Website: ${event.event_url}` : ''}
+
+👉 Im EventHub öffnen: ${eventHubLink}
+
+Viele Grüße`
+  );
+  
+  return `mailto:${recipientEmail}?subject=${subject}&body=${body}`;
 }
 
 function downloadICS(event: EventRow) {
@@ -293,6 +328,12 @@ export function EventsPage() {
   const calendarMenuRef = useRef<HTMLDivElement | null>(null);
   const [rightColHeight, setRightColHeight] = useState<number | null>(null);
   const [showCalendarMenu, setShowCalendarMenu] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  
+  // Nutzer für Einladungen laden
+  const { data: allUsers = [] } = useUsers();
 
   // Schließe Kalender-Menü bei Klick außerhalb
   useEffect(() => {
@@ -1127,7 +1168,10 @@ export function EventsPage() {
                       </svg>
                     </button>
                     {showCalendarMenu && (
-                      <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                      <div className="absolute right-0 top-10 z-50 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                        <div className="border-b border-slate-100 px-3 py-1.5">
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Kalender</span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
@@ -1155,6 +1199,39 @@ export function EventsPage() {
                             <path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.13V2.55q0-.44.3-.75.3-.3.7-.3h15.12q.44 0 .75.3.3.3.3.75V12zm-8.95 0q-.41-.68-1-1.03-.6-.35-1.4-.35-.89 0-1.55.33-.66.34-1.1.92-.44.58-.67 1.36-.22.77-.22 1.64 0 .88.2 1.66.2.79.65 1.38.44.58 1.11.92.68.33 1.56.33.67 0 1.25-.24.58-.24 1.02-.66.43-.42.7-.98.28-.57.35-1.23H12.6q0 .38-.12.64-.12.26-.35.43-.23.17-.56.25-.32.08-.72.08-.59 0-1-.17-.41-.17-.68-.49-.27-.32-.4-.76-.12-.44-.12-.98 0-.52.13-.97.13-.46.4-.79.28-.33.68-.51.4-.17.98-.17.58 0 .94.18.36.18.57.52zM2 8.39v6.83H6V8.39zm15.3 6.23q.42 0 .81-.1.39-.1.72-.29.33-.2.57-.5.25-.31.36-.74H16.1q0 .39.15.67.17.29.42.48.26.19.6.29.32.1.66.1h0zM19.08 6v.61h-2.66V6zm-1.33 1.91v.61h-1.33v-.61zm1.33 1.91v.61h-2.66v-.61z"/>
                           </svg>
                           Outlook Web öffnen
+                        </button>
+                        <div className="border-t border-slate-100 px-3 py-1.5">
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Teilen</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCalendarMenu(false);
+                            setShowInviteModal(true);
+                            setInviteEmail('');
+                            setSelectedUserIds([]);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                          </svg>
+                          Per E-Mail einladen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            copyEventLink(selectedEvent.id);
+                            setShowCalendarMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                          </svg>
+                          Link kopieren
                         </button>
                       </div>
                     )}
@@ -1598,6 +1675,139 @@ export function EventsPage() {
                 onClick={() => setShowRatingModal(false)}
               >
                 Fertig
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Einladungs-Modal */}
+      {showInviteModal && selectedEvent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowInviteModal(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-5 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">Event-Einladung senden</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-slate-500">{selectedEvent.title}</p>
+            </div>
+
+            <div className="space-y-4 p-5">
+              {/* Nutzer-Auswahl */}
+              {allUsers.length > 0 && (
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-slate-700">Team-Mitglieder auswählen</label>
+                  <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50">
+                    {allUsers.map((user) => (
+                      <label
+                        key={user.id}
+                        className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-100"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.includes(user.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUserIds([...selectedUserIds, user.id]);
+                            } else {
+                              setSelectedUserIds(selectedUserIds.filter((id) => id !== user.id));
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-slate-700">{user.name || user.email}</div>
+                          {user.name && <div className="truncate text-xs text-slate-400">{user.email}</div>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Trennlinie */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs text-slate-400">oder</span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              {/* E-Mail Eingabe */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">Externe E-Mail-Adresse</label>
+                <Input
+                  type="email"
+                  placeholder="beispiel@firma.de"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+
+              {/* Event-Vorschau */}
+              <div className="rounded-lg bg-gradient-to-br from-brand/5 to-brand/10 p-3">
+                <div className="mb-2 text-xs text-slate-500">Vorschau der Einladung:</div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span>📅</span>
+                    <span className="font-medium text-slate-700">{selectedEvent.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span>📆</span>
+                    <span>
+                      {selectedEvent.start_date 
+                        ? new Date(selectedEvent.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
+                        : 'Datum folgt'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span>📍</span>
+                    <span>{[selectedEvent.location, selectedEvent.city].filter(Boolean).join(', ') || 'Ort folgt'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <Button variant="secondary" onClick={() => setShowInviteModal(false)}>
+                Abbrechen
+              </Button>
+              <Button
+                onClick={() => {
+                  const emails: string[] = [];
+                  selectedUserIds.forEach((userId) => {
+                    const user = allUsers.find((u) => u.id === userId);
+                    if (user?.email) emails.push(user.email);
+                  });
+                  if (inviteEmail.trim()) {
+                    emails.push(inviteEmail.trim());
+                  }
+                  if (emails.length === 0) {
+                    toast.error('Bitte wähle mindestens einen Empfänger aus');
+                    return;
+                  }
+                  const mailtoUrl = generateCalendarEmail(selectedEvent, emails.join(','));
+                  window.open(mailtoUrl, '_blank');
+                  downloadICS(selectedEvent);
+                  toast.success(`Einladung an ${emails.length} Empfänger vorbereitet`);
+                  setShowInviteModal(false);
+                }}
+              >
+                Einladung senden
               </Button>
             </div>
           </div>
