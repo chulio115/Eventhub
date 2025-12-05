@@ -8,7 +8,7 @@ create extension if not exists "citext";
 -- Enums
 create type public.user_role as enum ('user', 'admin', 'extern');
 create type public.event_status as enum ('planned', 'consider', 'attended', 'cancelled');
-create type public.cost_type as enum ('participant', 'booth');
+create type public.cost_type as enum ('participant', 'booth', 'sponsoring');
 
 -- Users (App-spezifische User, verknüpft mit auth.users)
 create table if not exists public.users (

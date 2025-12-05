@@ -9,6 +9,7 @@ import { useUpdateEvent } from '../features/events/useUpdateEvent';
 import { useDeleteEvent } from '../features/events/useDeleteEvent';
 import { useEventHistory, useAddHistoryEntry } from '../features/events/useEventHistory';
 import { useUploadEventFile } from '../features/events/useUploadEventFile';
+import { useDeleteHistoryEntry } from '../features/events/useDeleteHistoryEntry';
 import { useAuth } from '../features/auth/AuthContext';
 
 function copyEventLink(eventId: string) {
@@ -31,10 +32,16 @@ function generateICS(event: EventRow): string {
   const startDate = formatICSDate(event.start_date);
   const endDate = formatICSDate(event.end_date) || startDate;
   const location = [event.location, event.city].filter(Boolean).join(', ');
+  
+  // EventHub-Link zur Beschreibung hinzufügen
+  const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+  const eventHubLink = `${appUrl}/events?id=${event.id}`;
+  
   const description = [
     `Veranstalter: ${event.organizer || 'N/A'}`,
     event.event_url ? `Website: ${event.event_url}` : '',
-    event.notes ? `Notizen: ${event.notes}` : '',
+    `\\n📋 Im EventHub öffnen: ${eventHubLink}`,
+    event.notes ? `\\nNotizen: ${event.notes}` : '',
   ].filter(Boolean).join('\\n');
 
   return [
@@ -51,6 +58,7 @@ function generateICS(event: EventRow): string {
     `SUMMARY:${event.title}`,
     location ? `LOCATION:${location}` : '',
     `DESCRIPTION:${description}`,
+    `URL:${eventHubLink}`,
     `ORGANIZER:${event.organizer || ''}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',
@@ -415,6 +423,7 @@ export function EventsPage() {
   } = useEventHistory(effectiveSelectedId ?? null);
 
   const addHistory = useAddHistoryEntry();
+  const deleteHistory = useDeleteHistoryEntry();
   const uploadFile = useUploadEventFile();
 
   const normalizedDraftColleagues = draftColleagues
@@ -1450,16 +1459,32 @@ export function EventsPage() {
                         )}
                         {!isHistoryLoading && history.length > 0 && (
                           <ul className="space-y-2">
-                            {history.map((entry) => (
+                            {history.map((entry, index) => (
                               <li key={entry.id} className="flex flex-col gap-0.5 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[11px] text-slate-400">
-                                    {new Date(entry.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                  {entry.user_email && (
-                                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
-                                      {entry.user_email.split('@')[0]}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] text-slate-400">
+                                      {new Date(entry.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                     </span>
+                                    {entry.user_email && (
+                                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
+                                        {entry.user_email.split('@')[0]}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Löschen-Button nur für Admins und die letzten 2 Einträge */}
+                                  {isAdmin && index < 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteHistory.mutate(entry.id)}
+                                      disabled={deleteHistory.isPending}
+                                      className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
+                                      title="Eintrag löschen"
+                                    >
+                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
                                   )}
                                 </div>
                                 <span className="text-xs text-slate-700">
