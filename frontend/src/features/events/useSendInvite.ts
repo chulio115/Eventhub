@@ -26,8 +26,16 @@ export function useSendInvite() {
         body: { to, event, appUrl, senderName },
       });
 
+      console.log('Edge function response:', { data, error });
+
       if (error) {
-        throw new Error(error.message || 'Fehler beim Senden');
+        // Versuche den Fehler aus dem Response-Body zu lesen
+        const errorMessage = error.message || 'Fehler beim Senden';
+        throw new Error(errorMessage);
+      }
+
+      if (!data) {
+        throw new Error('Keine Antwort von der Edge Function');
       }
 
       if (!data.success) {

@@ -135,7 +135,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'EventHub <noreply@resend.dev>', // Oder eigene verifizierte Domain
+        from: 'EventHub <noreply@immomio.de>', // Oder eigene verifizierte Domain
         to: to,
         subject: `📅 Einladung: ${event.title}`,
         html: htmlContent,
