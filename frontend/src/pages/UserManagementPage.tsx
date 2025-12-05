@@ -1,99 +1,83 @@
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUsers } from '../features/users/useUsers';
 import { useUpdateUserRole } from '../features/users/useUpdateUserRole';
-import { useInviteUser } from '../features/users/useInviteUser';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
+import { useDeleteUser } from '../features/users/useDeleteUser';
 
 export function UserManagementPage() {
   const { profile } = useAuth();
   const { data: users = [], isLoading, error } = useUsers();
   const updateRole = useUpdateUserRole();
-  const inviteUser = useInviteUser();
+  const deleteUser = useDeleteUser();
 
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  async function handleInvite(e: FormEvent) {
-    e.preventDefault();
-    setInviteSuccess(null);
-    setInviteError(null);
-
-    if (!inviteEmail.trim()) return;
-
+  async function handleDeleteUser(userId: string, email: string) {
     try {
-      await inviteUser.mutateAsync({ email: inviteEmail.trim() });
-      setInviteSuccess(`Einladung an ${inviteEmail} wurde versendet.`);
-      setInviteEmail('');
+      await deleteUser.mutateAsync(userId);
+      toast.success(`Benutzer ${email} wurde gelöscht`);
+      setDeleteConfirmId(null);
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : 'Einladung fehlgeschlagen');
+      toast.error(err instanceof Error ? err.message : 'Löschen fehlgeschlagen');
     }
   }
+
+  async function handleRoleChange(userId: string, newRole: 'admin' | 'user' | 'extern') {
+    try {
+      await updateRole.mutateAsync({ id: userId, role: newRole });
+      toast.success('Rolle wurde aktualisiert');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Rollenänderung fehlgeschlagen');
+    }
+  }
+
+  const userToDelete = users.find((u) => u.id === deleteConfirmId);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Benutzerverwaltung</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Nutzer:innen verwalten und Rollen (Admin, User, Extern) setzen. Änderungen wirken direkt in Supabase.
+          Nutzer:innen verwalten und Rollen (Admin, User, Extern) setzen.
         </p>
       </div>
 
-      {/* Invite-Formular */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">
-          Neuen Benutzer einladen
-        </h2>
-        <form onSubmit={handleInvite} className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[200px]">
-            <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
-              E-Mail-Adresse (@immomio.de)
-            </label>
-            <Input
-              type="email"
-              placeholder="vorname.nachname@immomio.de"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              required
-            />
+      {/* Info-Box */}
+      <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/20">
+        <div className="flex items-start gap-3">
+          <svg className="mt-0.5 h-5 w-5 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-sm text-sky-800 dark:text-sky-200">
+            <p className="font-medium">Benutzer werden automatisch angelegt</p>
+            <p className="mt-1 text-sky-700 dark:text-sky-300">
+              Wenn sich jemand mit einer @immomio.de E-Mail über den Magic Link anmeldet, wird automatisch ein Konto erstellt. 
+              Du kannst hier die Rolle anpassen oder Benutzer entfernen.
+            </p>
           </div>
-          <Button
-            type="submit"
-            disabled={inviteUser.isPending || !inviteEmail.trim()}
-          >
-            {inviteUser.isPending ? 'Sende…' : 'Einladung senden'}
-          </Button>
-        </form>
-        {inviteSuccess && (
-          <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-            {inviteSuccess}
-          </div>
-        )}
-        {inviteError && (
-          <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
-            {inviteError}
-          </div>
-        )}
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Der eingeladene Benutzer erhält einen Magic Link per E-Mail und wird bei erstmaliger Anmeldung automatisch registriert.
-        </p>
+        </div>
       </div>
 
+      {/* Benutzer-Liste */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300">
-          Benutzer (Supabase public.users)
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2 dark:border-slate-800 dark:bg-slate-800">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+            Benutzer ({users.length})
+          </span>
         </div>
         <div className="divide-y divide-slate-100 text-sm dark:divide-slate-800">
           {isLoading && (
-            <div className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">Lade Benutzer…</div>
+            <div className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+              <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand" />
+              <p className="mt-2">Lade Benutzer…</p>
+            </div>
           )}
           {error && (
             <div className="px-4 py-3 text-xs text-red-600">Fehler beim Laden: {error.message}</div>
           )}
           {!isLoading && !error && users.length === 0 && (
-            <div className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">
+            <div className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
               Noch keine Benutzer vorhanden.
             </div>
           )}
@@ -103,30 +87,41 @@ export function UserManagementPage() {
               const isSelf = profile?.id === u.id;
 
               return (
-                <div key={u.id} className="flex items-center gap-4 px-4 py-3">
-                  <div className="flex-1 min-w-0">
+                <div key={u.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  {/* Avatar */}
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-dark text-sm font-bold text-white">
+                    {(u.name || u.email).charAt(0).toUpperCase()}
+                  </div>
+                  
+                  {/* Info */}
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium text-slate-900 dark:text-slate-50">
-                        {u.email}
+                        {u.name || u.email.split('@')[0]}
                       </span>
                       {isSelf && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
                           Du
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                      {u.name || 'Kein Name hinterlegt'}
+                    <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                      {u.email}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span>Rolle</span>
+
+                  {/* Rolle */}
+                  <div className="flex items-center gap-2">
                     <select
-                      className="h-8 rounded-full border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className={`h-8 rounded-full border px-3 text-xs font-medium shadow-sm transition-colors ${
+                        u.role === 'admin'
+                          ? 'border-brand/30 bg-brand/10 text-brand'
+                          : u.role === 'extern'
+                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
+                      }`}
                       value={u.role}
-                      onChange={(e) =>
-                        updateRole.mutate({ id: u.id, role: e.target.value as typeof u.role })
-                      }
+                      onChange={(e) => handleRoleChange(u.id, e.target.value as 'admin' | 'user' | 'extern')}
                       disabled={updateRole.isPending || isSelf}
                     >
                       <option value="admin">Admin</option>
@@ -134,14 +129,98 @@ export function UserManagementPage() {
                       <option value="extern">Extern</option>
                     </select>
                   </div>
+
+                  {/* Datum */}
                   <div className="hidden text-xs text-slate-400 md:block dark:text-slate-500">
                     {new Date(u.created_at).toLocaleDateString('de-DE')}
                   </div>
+
+                  {/* Löschen-Button */}
+                  {!isSelf && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmId(u.id)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 shadow-sm transition-colors hover:bg-rose-50 hover:text-rose-600 dark:border-rose-800 dark:bg-slate-800 dark:hover:bg-rose-900/20"
+                      title="Benutzer löschen"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               );
             })}
         </div>
       </div>
+
+      {/* Rollen-Erklärung */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">Rollen-Übersicht</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg bg-brand/5 p-3">
+            <div className="mb-1 text-xs font-semibold text-brand">Admin</div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Vollzugriff auf alle Events, Benutzer verwalten, Einstellungen ändern
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+            <div className="mb-1 text-xs font-semibold text-slate-700 dark:text-slate-200">User</div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Eigene Events erstellen und bearbeiten, alle Events sehen
+            </p>
+          </div>
+          <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
+            <div className="mb-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Extern</div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Eingeschränkter Lesezugriff, keine Bearbeitung möglich
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Lösch-Bestätigung Modal */}
+      {deleteConfirmId && userToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setDeleteConfirmId(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30">
+              <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+              Benutzer löschen?
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Möchtest du <strong>{userToDelete.email}</strong> wirklich löschen? 
+              Diese Aktion kann nicht rückgängig gemacht werden.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 rounded-full border border-slate-200 bg-white py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteUser(userToDelete.id, userToDelete.email)}
+                disabled={deleteUser.isPending}
+                className="flex-1 rounded-full bg-rose-600 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {deleteUser.isPending ? 'Lösche…' : 'Löschen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

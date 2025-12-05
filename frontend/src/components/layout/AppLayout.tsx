@@ -6,8 +6,8 @@ import { useTheme } from '../../features/theme/ThemeProvider';
 
 const navItems = [
   { to: '/events', label: 'Events' },
-  { to: '/events/calendar', label: 'Kalender' },
-  { to: '/events/costs', label: 'Kosten & Teilnahmen' },
+  { to: '/calendar', label: 'Kalender' },
+  { to: '/costs', label: 'Kosten & Teilnahmen' },
 ];
 
 interface AppLayoutProps {
@@ -74,7 +74,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     Einstellungen
                   </NavLink>
                   <NavLink
-                    to="/settings/users"
+                    to="/users"
                     className={({ isActive }) =>
                       `rounded-full px-3 py-1 transition-colors ${
                         isActive

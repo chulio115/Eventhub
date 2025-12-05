@@ -141,6 +141,7 @@ export function CostsPage() {
   const [yearFilter, setYearFilter] = useState<number | 'all'>('all');
   const [quarterFilter, setQuarterFilter] = useState<1 | 2 | 3 | 4 | 'all'>('all');
   const [costTypeFilter, setCostTypeFilter] = useState<'all' | 'participant' | 'booth'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'booked' | 'planned' | 'cancelled' | 'consider'>('all');
   const [organizerFilter, setOrganizerFilter] = useState<string>('');
   const [cityFilter, setCityFilter] = useState<string>('');
   const [colleagueFilter, setColleagueFilter] = useState<string>('');
@@ -151,6 +152,7 @@ export function CostsPage() {
     yearFilter !== 'all',
     quarterFilter !== 'all',
     costTypeFilter !== 'all',
+    statusFilter !== 'all',
     organizerFilter !== '',
     cityFilter !== '',
     colleagueFilter !== '',
@@ -186,6 +188,19 @@ export function CostsPage() {
     // Kolleg:in
     if (colleagueFilter && !(row.colleagues ?? []).includes(colleagueFilter)) return false;
 
+    // Status
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'booked') {
+        if (row.status !== 'attended' && !row.booked) return false;
+      } else if (statusFilter === 'planned') {
+        if (row.status !== 'planned' || row.booked) return false;
+      } else if (statusFilter === 'cancelled') {
+        if (row.status !== 'cancelled') return false;
+      } else if (statusFilter === 'consider') {
+        if (row.status !== 'consider') return false;
+      }
+    }
+
     // Kostenbereich
     if (costRangeFilter !== 'all') {
       const cost = row.total_cost ?? 0;
@@ -202,6 +217,7 @@ export function CostsPage() {
     setYearFilter('all');
     setQuarterFilter('all');
     setCostTypeFilter('all');
+    setStatusFilter('all');
     setOrganizerFilter('');
     setCityFilter('');
     setColleagueFilter('');
@@ -464,6 +480,27 @@ export function CostsPage() {
           <option value="all">Kostenart</option>
           <option value="participant">Teilnehmerkosten</option>
           <option value="booth">Messestandkosten</option>
+        </select>
+
+        {/* Status */}
+        <select
+          className={`h-7 rounded-full border px-2.5 text-xs font-medium shadow-sm ${
+            statusFilter !== 'all'
+              ? statusFilter === 'booked'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                : statusFilter === 'cancelled'
+                ? 'border-rose-300 bg-rose-50 text-rose-700'
+                : 'border-brand bg-brand/10 text-brand'
+              : 'border-slate-200 bg-white text-slate-700'
+          }`}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'booked' | 'planned' | 'cancelled' | 'consider')}
+        >
+          <option value="all">Status</option>
+          <option value="booked">Gebucht</option>
+          <option value="planned">Geplant</option>
+          <option value="consider">Bewertung</option>
+          <option value="cancelled">Abgesagt</option>
         </select>
 
         {/* Veranstalter */}

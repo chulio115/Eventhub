@@ -8,6 +8,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { CostsPage } from './pages/CostsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { RequireAuth } from './features/auth/RequireAuth';
 import { RequireAdmin } from './features/auth/RequireAdmin';
 
@@ -21,20 +22,22 @@ export default function App() {
 
         {/* Geschützte App-Routen */}
         <Route element={<RequireAuth />}>
+          {/* Hauptrouten */}
+          <Route path="/" element={<Navigate to="/events" replace />} />
           <Route path="/events" element={<EventsPage />} />
-          <Route path="/events/calendar" element={<CalendarPage />} />
-          <Route path="/events/costs" element={<CostsPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/costs" element={<CostsPage />} />
           <Route path="/events/:id" element={<EventDetailPage />} />
 
           {/* Admin-Bereich */}
           <Route element={<RequireAdmin />}>
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/users" element={<UserManagementPage />} />
+            <Route path="/users" element={<UserManagementPage />} />
           </Route>
         </Route>
 
-        {/* Fallback: immer auf Events leiten (Auth greift dann automatisch) */}
-        <Route path="*" element={<Navigate to="/events" replace />} />
+        {/* 404 Fallback */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AppLayout>
   );
