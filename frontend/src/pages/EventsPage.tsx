@@ -1827,11 +1827,7 @@ export function EventsPage() {
                         setInviteEmail('');
                       },
                       onError: () => {
-                        // Fallback auf mailto
-                        const mailtoUrl = generateCalendarEmail(selectedEvent, emails.join(','));
-                        window.open(mailtoUrl, '_blank');
-                        downloadICS(selectedEvent);
-                        setShowInviteModal(false);
+                        // Modal offen lassen bei Fehler, damit User es nochmal versuchen kann
                       },
                     }
                   );

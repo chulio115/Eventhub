@@ -40,12 +40,8 @@ export function useSendInvite() {
       toast.success(data.message || 'Einladung gesendet!');
     },
     onError: (error: Error) => {
-      // Fallback auf mailto wenn Edge Function nicht verfügbar
-      if (error.message.includes('RESEND_API_KEY') || error.message.includes('nicht konfiguriert')) {
-        toast.error('E-Mail-Service nicht konfiguriert. Nutze die mailto-Variante.');
-      } else {
-        toast.error(`Fehler: ${error.message}`);
-      }
+      console.error('Send invite error:', error);
+      toast.error(`E-Mail-Fehler: ${error.message}`);
     },
   });
 }
