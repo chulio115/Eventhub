@@ -4,14 +4,18 @@ import { useAuth } from '../features/auth/AuthContext';
 import { useUsers } from '../features/users/useUsers';
 import { useUpdateUserRole } from '../features/users/useUpdateUserRole';
 import { useDeleteUser } from '../features/users/useDeleteUser';
+import { useInviteUser } from '../features/users/useInviteUser';
 
 export function UserManagementPage() {
   const { profile } = useAuth();
   const { data: users = [], isLoading, error } = useUsers();
   const updateRole = useUpdateUserRole();
   const deleteUser = useDeleteUser();
+  const inviteUser = useInviteUser();
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
 
   async function handleDeleteUser(userId: string, email: string) {
     try {
@@ -32,6 +36,18 @@ export function UserManagementPage() {
     }
   }
 
+  async function handleInviteUser(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await inviteUser.mutateAsync({ email: inviteEmail });
+      toast.success(`Magic Link wurde an ${inviteEmail} gesendet!`);
+      setInviteEmail('');
+      setShowInviteForm(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Einladung fehlgeschlagen');
+    }
+  }
+
   const userToDelete = users.find((u) => u.id === deleteConfirmId);
 
   return (
@@ -43,21 +59,57 @@ export function UserManagementPage() {
         </p>
       </div>
 
-      {/* Info-Box */}
-      <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/20">
-        <div className="flex items-start gap-3">
-          <svg className="mt-0.5 h-5 w-5 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      {/* Einladungs-Bereich */}
+      {!showInviteForm ? (
+        <button
+          onClick={() => setShowInviteForm(true)}
+          className="flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-dark"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          <div className="text-sm text-sky-800 dark:text-sky-200">
-            <p className="font-medium">Benutzer werden automatisch angelegt</p>
-            <p className="mt-1 text-sky-700 dark:text-sky-300">
-              Wenn sich jemand mit einer @immomio.de E-Mail über den Magic Link anmeldet, wird automatisch ein Konto erstellt. 
-              Du kannst hier die Rolle anpassen oder Benutzer entfernen.
-            </p>
+          Nutzer einladen
+        </button>
+      ) : (
+        <form onSubmit={handleInviteUser} className="rounded-xl border border-brand/30 bg-brand/5 p-4">
+          <div className="flex items-center gap-3">
+            <svg className="h-5 w-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-50">Magic Link versenden</p>
+              <p className="text-xs text-slate-500">Ein Login-Link wird an die E-Mail-Adresse gesendet</p>
+            </div>
           </div>
-        </div>
-      </div>
+          <div className="mt-3 flex gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="vorname.nachname@immomio.de"
+              className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-slate-700 dark:bg-slate-800"
+              required
+            />
+            <button
+              type="submit"
+              disabled={inviteUser.isPending || !inviteEmail}
+              className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
+            >
+              {inviteUser.isPending ? 'Sende…' : 'Senden'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowInviteForm(false);
+                setInviteEmail('');
+              }}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            >
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Benutzer-Liste */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -163,18 +215,19 @@ export function UserManagementPage() {
               <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">Admin</span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Vollzugriff auf alle Events, Benutzer verwalten, alle Daten exportieren
+              Events erstellen, bearbeiten und löschen. Benutzer verwalten, alle Daten exportieren.
             </p>
           </div>
           <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
             <div className="mb-1 flex items-center gap-2">
               <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
               <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">User</span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Eigene Events erstellen und bearbeiten, alle Events einsehen
+              Nur Lesezugriff. Kann alle Events, Kalender und Finanzen einsehen.
             </p>
           </div>
         </div>

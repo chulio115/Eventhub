@@ -20,10 +20,15 @@ export interface EventRow {
   tags: string[];
   event_url: string | null;
   notes: string | null;
+  visitor_notes: string | null;
   attachments: string[];
   linkedin_plan: boolean;
   linkedin_note: string | null;
   publication_status: boolean;
+  rating_sales: number | null;
+  rating_kam: number | null;
+  rating_marketing: number | null;
+  rating_clevel: number | null;
 }
 
 export function useEvents() {
@@ -49,10 +54,15 @@ export function useEvents() {
             'cost_value',
             'event_url',
             'notes',
+            'visitor_notes',
             'attachments',
             'linkedin_plan',
             'linkedin_note',
             'publication_status',
+            'rating_sales',
+            'rating_kam',
+            'rating_marketing',
+            'rating_clevel',
           ].join(', '),
         )
         .order('start_date', { ascending: true });

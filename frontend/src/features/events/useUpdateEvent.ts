@@ -19,10 +19,15 @@ export interface UpdateEventInput {
   cost_value: number;
   event_url: string | null;
   notes: string | null;
+  visitor_notes: string | null;
   attachments: string[];
   linkedin_plan: boolean;
   linkedin_note: string | null;
   publication_status: boolean;
+  rating_sales: number | null;
+  rating_kam: number | null;
+  rating_marketing: number | null;
+  rating_clevel: number | null;
 }
 
 export function useUpdateEvent() {

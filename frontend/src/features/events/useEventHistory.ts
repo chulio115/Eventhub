@@ -6,6 +6,7 @@ export interface EventHistoryRow {
   event_id: string;
   action: string;
   timestamp: string;
+  user_email: string | null;
 }
 
 export function useEventHistory(eventId: string | null) {
@@ -15,7 +16,7 @@ export function useEventHistory(eventId: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('event_history')
-        .select('id, event_id, action, timestamp')
+        .select('id, event_id, action, timestamp, user_email')
         .eq('event_id', eventId)
         .order('timestamp', { ascending: false });
 
@@ -32,16 +33,17 @@ export function useAddHistoryEntry() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { eventId: string; action: string }) => {
-      const { eventId, action } = input;
+    mutationFn: async (input: { eventId: string; action: string; userEmail?: string }) => {
+      const { eventId, action, userEmail } = input;
 
       const { data, error } = await supabase
         .from('event_history')
         .insert({
           event_id: eventId,
           action,
+          user_email: userEmail || null,
         })
-        .select('id, event_id, action, timestamp')
+        .select('id, event_id, action, timestamp, user_email')
         .single();
 
       if (error) {

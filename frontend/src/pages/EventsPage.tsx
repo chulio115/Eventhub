@@ -9,6 +9,7 @@ import { useUpdateEvent } from '../features/events/useUpdateEvent';
 import { useDeleteEvent } from '../features/events/useDeleteEvent';
 import { useEventHistory, useAddHistoryEntry } from '../features/events/useEventHistory';
 import { useUploadEventFile } from '../features/events/useUploadEventFile';
+import { useAuth } from '../features/auth/AuthContext';
 
 function copyEventLink(eventId: string) {
   const url = `${window.location.origin}/events?id=${eventId}`;
@@ -120,6 +121,39 @@ type UiStatus = 'bewertung' | 'geplant' | 'gebucht' | 'abgesagt';
 type StatusFilter = 'all' | UiStatus;
 type YearFilter = 'all' | number;
 
+// Berechne Durchschnittsbewertung
+function calculateAverageRating(ratings: (number | null)[]): number | null {
+  const validRatings = ratings.filter((r): r is number => r !== null && r > 0);
+  if (validRatings.length === 0) return null;
+  return Math.round((validRatings.reduce((a, b) => a + b, 0) / validRatings.length) * 10) / 10;
+}
+
+// Stern-Komponente für Bewertung
+function StarRating({ value, onChange, readonly = false }: { value: number | null; onChange?: (v: number | null) => void; readonly?: boolean }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => !readonly && onChange?.(value === star ? null : star)}
+          disabled={readonly}
+          className={`h-5 w-5 transition-colors ${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill={value !== null && star <= value ? '#fbbf24' : 'none'}
+            stroke={value !== null && star <= value ? '#fbbf24' : '#cbd5e1'}
+            strokeWidth="2"
+          >
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function mapToUiStatus(status: EventRow['status'], booked: boolean): UiStatus {
   if (status === 'cancelled') return 'abgesagt';
   if (status === 'attended') return 'gebucht';
@@ -144,6 +178,8 @@ function mapFromUiStatus(ui: UiStatus): { status: EventRow['status']; booked: bo
 }
 
 export function EventsPage() {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading, error } = useEvents();
   const events: EventRow[] = data ?? [];
@@ -193,10 +229,18 @@ export function EventsPage() {
   const [draftEventUrl, setDraftEventUrl] = useState('');
   const [draftAttachments, setDraftAttachments] = useState('');
   const [draftNotes, setDraftNotes] = useState('');
+  const [draftVisitorNotes, setDraftVisitorNotes] = useState('');
   const [draftLinkedinPlan, setDraftLinkedinPlan] = useState(false);
   const [draftLinkedinNote, setDraftLinkedinNote] = useState('');
   const [draftPublicationStatus, setDraftPublicationStatus] = useState(false);
   const [draftBooked, setDraftBooked] = useState(false);
+  
+  // Bewertungen
+  const [draftRatingSales, setDraftRatingSales] = useState<number | null>(null);
+  const [draftRatingKam, setDraftRatingKam] = useState<number | null>(null);
+  const [draftRatingMarketing, setDraftRatingMarketing] = useState<number | null>(null);
+  const [draftRatingClevel, setDraftRatingClevel] = useState<number | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const rightColRef = useRef<HTMLDivElement | null>(null);
@@ -305,6 +349,17 @@ export function EventsPage() {
     if (tagFilter && !(event.tags || []).includes(tagFilter)) return false;
 
     return true;
+  }).sort((a, b) => {
+    // Events ohne Datum zuerst anzeigen
+    const dateA = a.start_date ?? a.end_date;
+    const dateB = b.start_date ?? b.end_date;
+    
+    if (!dateA && !dateB) return 0; // Beide ohne Datum - Reihenfolge beibehalten
+    if (!dateA) return -1; // A ohne Datum kommt zuerst
+    if (!dateB) return 1;  // B ohne Datum kommt zuerst
+    
+    // Beide haben Datum - nach Datum sortieren (neueste zuerst)
+    return new Date(dateA).getTime() - new Date(dateB).getTime();
   });
 
   const effectiveSelectedId =
@@ -358,9 +413,14 @@ export function EventsPage() {
         draftCostNumeric !== (selectedEvent.cost_value ?? 0) ||
         draftEventUrl.trim() !== (selectedEvent.event_url ?? '') ||
         draftNotes.trim() !== (selectedEvent.notes ?? '') ||
+        draftVisitorNotes.trim() !== (selectedEvent.visitor_notes ?? '') ||
         Boolean(draftLinkedinNote.trim()) !== selectedEvent.linkedin_plan ||
         draftLinkedinNote.trim() !== (selectedEvent.linkedin_note ?? '') ||
         draftPublicationStatus !== selectedEvent.publication_status ||
+        draftRatingSales !== selectedEvent.rating_sales ||
+        draftRatingKam !== selectedEvent.rating_kam ||
+        draftRatingMarketing !== selectedEvent.rating_marketing ||
+        draftRatingClevel !== selectedEvent.rating_clevel ||
         JSON.stringify(normalizedDraftColleagues) !==
           JSON.stringify(selectedEvent.colleagues || []) ||
         JSON.stringify(normalizedDraftTags) !== JSON.stringify(selectedEvent.tags || []) ||
@@ -385,10 +445,15 @@ export function EventsPage() {
       setDraftEventUrl('');
       setDraftAttachments('');
       setDraftNotes('');
+      setDraftVisitorNotes('');
       setDraftLinkedinPlan(false);
       setDraftLinkedinNote('');
       setDraftPublicationStatus(false);
       setDraftBooked(false);
+      setDraftRatingSales(null);
+      setDraftRatingKam(null);
+      setDraftRatingMarketing(null);
+      setDraftRatingClevel(null);
       return;
     }
 
@@ -406,10 +471,15 @@ export function EventsPage() {
     setDraftEventUrl(selectedEvent.event_url ?? '');
     setDraftAttachments((selectedEvent.attachments || []).join('\n'));
     setDraftNotes(selectedEvent.notes ?? '');
+    setDraftVisitorNotes(selectedEvent.visitor_notes ?? '');
     setDraftLinkedinPlan(selectedEvent.linkedin_plan);
     setDraftLinkedinNote(selectedEvent.linkedin_note ?? '');
     setDraftPublicationStatus(selectedEvent.publication_status);
     setDraftBooked(selectedEvent.booked);
+    setDraftRatingSales(selectedEvent.rating_sales);
+    setDraftRatingKam(selectedEvent.rating_kam);
+    setDraftRatingMarketing(selectedEvent.rating_marketing);
+    setDraftRatingClevel(selectedEvent.rating_clevel);
   }, [selectedEvent?.id]);
 
   async function handleCreate(e: FormEvent) {
@@ -541,6 +611,19 @@ export function EventsPage() {
       changedFields.push('Notizen');
     }
 
+    if (draftVisitorNotes.trim() !== (selectedEvent.visitor_notes ?? '')) {
+      changedFields.push('Besucher-Notizen');
+    }
+
+    if (
+      draftRatingSales !== selectedEvent.rating_sales ||
+      draftRatingKam !== selectedEvent.rating_kam ||
+      draftRatingMarketing !== selectedEvent.rating_marketing ||
+      draftRatingClevel !== selectedEvent.rating_clevel
+    ) {
+      changedFields.push('Bewertungen');
+    }
+
     if (
       linkedinPlanned !== selectedEvent.linkedin_plan ||
       linkedinNoteTrimmed !== (selectedEvent.linkedin_note ?? '')
@@ -589,15 +672,20 @@ export function EventsPage() {
         cost_value: costNumeric,
         event_url: draftEventUrl.trim() || null,
         notes: draftNotes.trim() || null,
+        visitor_notes: draftVisitorNotes.trim() || null,
         attachments: attachmentsArray,
         linkedin_plan: linkedinPlanned,
         linkedin_note: linkedinNoteTrimmed || null,
         publication_status: draftPublicationStatus,
+        rating_sales: draftRatingSales,
+        rating_kam: draftRatingKam,
+        rating_marketing: draftRatingMarketing,
+        rating_clevel: draftRatingClevel,
       });
 
       historyActions.forEach((action) => {
         if (!action) return;
-        addHistory.mutate({ eventId: selectedEvent.id, action });
+        addHistory.mutate({ eventId: selectedEvent.id, action, userEmail: profile?.email });
       });
     } catch {
       // spätere Fehleranzeige möglich
@@ -945,9 +1033,23 @@ export function EventsPage() {
                     <option value="abgesagt">Abgesagt</option>
                   </select>
                 )}
-              </div>
+                              </div>
               {selectedEvent && (
                 <div className="flex items-center gap-2">
+                  {/* Bewertungs-Button mit Durchschnitt */}
+                  <button
+                    type="button"
+                    onClick={() => setShowRatingModal(true)}
+                    className="flex h-8 items-center gap-1.5 rounded-full border border-amber-200 bg-white px-2.5 text-amber-600 shadow-sm transition-colors hover:bg-amber-50"
+                    title="Event bewerten"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" strokeWidth="2">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                    <span className="text-xs font-semibold">
+                      {calculateAverageRating([draftRatingSales, draftRatingKam, draftRatingMarketing, draftRatingClevel])?.toFixed(1) || '–'}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => copyEventLink(selectedEvent.id)}
@@ -1013,16 +1115,16 @@ export function EventsPage() {
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(selectedEvent.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 shadow-sm transition-colors hover:bg-rose-50 hover:text-rose-600"
-                    title="Event löschen"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 shadow-sm transition-colors hover:bg-rose-50 hover:text-rose-600"
+                      title="Event löschen"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
                   </button>
                   <Button
                     type="button"
@@ -1242,13 +1344,26 @@ export function EventsPage() {
 
                   {/* Notizen & Historie über volle Breite */}
                     <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 md:col-span-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">Notizen</label>
-                      <textarea
-                        className="h-32 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                        value={draftNotes}
-                        onChange={(e) => setDraftNotes(e.target.value)}
-                      />
+                    {/* Notizen zweigeteilt */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-700">Notizen</label>
+                        <textarea
+                          className="h-32 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                          value={draftNotes}
+                          onChange={(e) => setDraftNotes(e.target.value)}
+                          placeholder="Allgemeine Notizen zum Event..."
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-700">Besucher-Notizen</label>
+                        <textarea
+                          className="h-32 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                          value={draftVisitorNotes}
+                          onChange={(e) => setDraftVisitorNotes(e.target.value)}
+                          placeholder="Notizen zu Besuchern, Kontakten..."
+                        />
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3 text-xs text-slate-700">
@@ -1275,13 +1390,20 @@ export function EventsPage() {
                           <div className="text-slate-400">Noch keine Einträge vorhanden.</div>
                         )}
                         {!isHistoryLoading && history.length > 0 && (
-                          <ul className="space-y-1">
+                          <ul className="space-y-2">
                             {history.map((entry) => (
-                              <li key={entry.id} className="flex gap-3">
-                                <span className="w-20 shrink-0 text-[11px] text-slate-400">
-                                  {new Date(entry.timestamp).toLocaleDateString('de-DE')}
-                                </span>
-                                <span className="flex-1 text-xs text-slate-700">
+                              <li key={entry.id} className="flex flex-col gap-0.5 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-slate-400">
+                                    {new Date(entry.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                  {entry.user_email && (
+                                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
+                                      {entry.user_email.split('@')[0]}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-slate-700">
                                   {entry.action}
                                 </span>
                               </li>
@@ -1330,6 +1452,69 @@ export function EventsPage() {
               >
                 {deleteEvent.isPending ? 'Lösche…' : 'Löschen'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rating Modal */}
+      {showRatingModal && selectedEvent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowRatingModal(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Event bewerten</h3>
+              <button
+                type="button"
+                onClick={() => setShowRatingModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="mb-5 text-sm text-slate-500">
+              Bewerte das Event aus verschiedenen Perspektiven (1-5 Sterne).
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">Sales Bewertung</label>
+                <StarRating value={draftRatingSales} onChange={setDraftRatingSales} />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">KAM Bewertung</label>
+                <StarRating value={draftRatingKam} onChange={setDraftRatingKam} />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">Marketing Bewertung</label>
+                <StarRating value={draftRatingMarketing} onChange={setDraftRatingMarketing} />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">C-Level Bewertung</label>
+                <StarRating value={draftRatingClevel} onChange={setDraftRatingClevel} />
+              </div>
+            </div>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-2">
+                <svg className="h-5 w-5 text-amber-500" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" strokeWidth="2">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                <span className="text-sm font-semibold text-slate-700">
+                  Durchschnitt: {calculateAverageRating([draftRatingSales, draftRatingKam, draftRatingMarketing, draftRatingClevel])?.toFixed(1) || '–'}
+                </span>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setShowRatingModal(false)}
+              >
+                Fertig
+              </Button>
             </div>
           </div>
         </div>
