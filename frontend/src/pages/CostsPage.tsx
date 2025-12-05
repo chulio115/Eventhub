@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventCosts, type EventCostRow } from '../features/events/useEventCosts';
 import { downloadCSV, formatDateForExport, formatCurrencyForExport, downloadCostReportPDF, type CostReportData } from '../lib/exportUtils';
+import { MultiSelect } from '../components/ui/MultiSelect';
 
 function formatEuro(value: number | null | undefined): string {
   const numeric = typeof value === 'number' ? value : 0;
@@ -137,76 +138,73 @@ export function CostsPage() {
   const cityOptions = Array.from(citySet).sort((a, b) => a.localeCompare(b, 'de-DE'));
   const colleagueOptions = Array.from(colleagueSet).sort((a, b) => a.localeCompare(b, 'de-DE'));
 
-  // Filter States
-  const [yearFilter, setYearFilter] = useState<number | 'all'>('all');
-  const [quarterFilter, setQuarterFilter] = useState<1 | 2 | 3 | 4 | 'all'>('all');
-  const [costTypeFilter, setCostTypeFilter] = useState<'all' | 'participant' | 'booth'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'booked' | 'planned' | 'cancelled' | 'consider'>('all');
-  const [organizerFilter, setOrganizerFilter] = useState<string>('');
-  const [cityFilter, setCityFilter] = useState<string>('');
-  const [colleagueFilter, setColleagueFilter] = useState<string>('');
-  const [costRangeFilter, setCostRangeFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  // Filter States - jetzt als Arrays für Multi-Select
+  const [yearFilter, setYearFilter] = useState<string[]>([]);
+  const [quarterFilter, setQuarterFilter] = useState<string[]>([]);
+  const [costTypeFilter, setCostTypeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [organizerFilter, setOrganizerFilter] = useState<string[]>([]);
+  const [cityFilter, setCityFilter] = useState<string[]>([]);
+  const [colleagueFilter, setColleagueFilter] = useState<string[]>([]);
+  const [costRangeFilter, setCostRangeFilter] = useState<string[]>([]);
 
   // Aktive Filter zählen
   const activeFilterCount = [
-    yearFilter !== 'all',
-    quarterFilter !== 'all',
-    costTypeFilter !== 'all',
-    statusFilter !== 'all',
-    organizerFilter !== '',
-    cityFilter !== '',
-    colleagueFilter !== '',
-    costRangeFilter !== 'all',
+    yearFilter.length > 0,
+    quarterFilter.length > 0,
+    costTypeFilter.length > 0,
+    statusFilter.length > 0,
+    organizerFilter.length > 0,
+    cityFilter.length > 0,
+    colleagueFilter.length > 0,
+    costRangeFilter.length > 0,
   ].filter(Boolean).length;
 
   // Filter anwenden
   const filteredRows = rows.filter((row) => {
-    // Jahr
-    if (yearFilter !== 'all') {
+    // Jahr (Multi-Select)
+    if (yearFilter.length > 0) {
       if (!row.start_date) return false;
       const d = new Date(row.start_date);
-      if (Number.isNaN(d.getTime()) || d.getFullYear() !== yearFilter) return false;
+      if (Number.isNaN(d.getTime()) || !yearFilter.includes(String(d.getFullYear()))) return false;
     }
 
-    // Quartal
-    if (quarterFilter !== 'all' && row.start_date) {
+    // Quartal (Multi-Select)
+    if (quarterFilter.length > 0 && row.start_date) {
       const d = new Date(row.start_date);
       const month = d.getMonth();
       const quarter = Math.floor(month / 3) + 1;
-      if (quarter !== quarterFilter) return false;
+      if (!quarterFilter.includes(String(quarter))) return false;
     }
 
-    // Kostenart
-    if (costTypeFilter !== 'all' && row.cost_type !== costTypeFilter) return false;
+    // Kostenart (Multi-Select)
+    if (costTypeFilter.length > 0 && !costTypeFilter.includes(row.cost_type)) return false;
 
-    // Veranstalter
-    if (organizerFilter && row.organizer !== organizerFilter) return false;
+    // Veranstalter (Multi-Select)
+    if (organizerFilter.length > 0 && (!row.organizer || !organizerFilter.includes(row.organizer))) return false;
 
-    // Stadt
-    if (cityFilter && row.city !== cityFilter) return false;
+    // Stadt (Multi-Select)
+    if (cityFilter.length > 0 && (!row.city || !cityFilter.includes(row.city))) return false;
 
-    // Kolleg:in
-    if (colleagueFilter && !(row.colleagues ?? []).includes(colleagueFilter)) return false;
-
-    // Status
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'booked') {
-        if (row.status !== 'attended' && !row.booked) return false;
-      } else if (statusFilter === 'planned') {
-        if (row.status !== 'planned' || row.booked) return false;
-      } else if (statusFilter === 'cancelled') {
-        if (row.status !== 'cancelled') return false;
-      } else if (statusFilter === 'consider') {
-        if (row.status !== 'consider') return false;
-      }
+    // Kolleg:in (Multi-Select) - mindestens einer muss passen
+    if (colleagueFilter.length > 0) {
+      const hasMatch = (row.colleagues ?? []).some((c) => colleagueFilter.includes(c));
+      if (!hasMatch) return false;
     }
 
-    // Kostenbereich
-    if (costRangeFilter !== 'all') {
+    // Status (Multi-Select)
+    if (statusFilter.length > 0) {
+      const rowStatus = row.status === 'attended' || row.booked ? 'booked' : row.status;
+      if (!statusFilter.includes(rowStatus)) return false;
+    }
+
+    // Kostenbereich (Multi-Select)
+    if (costRangeFilter.length > 0) {
       const cost = row.total_cost ?? 0;
-      if (costRangeFilter === 'low' && cost >= 500) return false;
-      if (costRangeFilter === 'medium' && (cost < 500 || cost >= 2000)) return false;
-      if (costRangeFilter === 'high' && cost < 2000) return false;
+      let range = 'low';
+      if (cost >= 2000) range = 'high';
+      else if (cost >= 500) range = 'medium';
+      if (!costRangeFilter.includes(range)) return false;
     }
 
     return true;
@@ -214,14 +212,14 @@ export function CostsPage() {
 
   // Filter zurücksetzen
   function resetFilters() {
-    setYearFilter('all');
-    setQuarterFilter('all');
-    setCostTypeFilter('all');
-    setStatusFilter('all');
-    setOrganizerFilter('');
-    setCityFilter('');
-    setColleagueFilter('');
-    setCostRangeFilter('all');
+    setYearFilter([]);
+    setQuarterFilter([]);
+    setCostTypeFilter([]);
+    setStatusFilter([]);
+    setOrganizerFilter([]);
+    setCityFilter([]);
+    setColleagueFilter([]);
+    setCostRangeFilter([]);
   }
 
   // Erweiterte Statistiken
@@ -334,11 +332,9 @@ export function CostsPage() {
 
   function handleExportPDF() {
     const filterInfo = [
-      yearFilter !== 'all' ? `Jahr: ${yearFilter}` : 'Alle Jahre',
-      costTypeFilter !== 'all'
-        ? costTypeFilter === 'participant'
-          ? 'Teilnehmerkosten'
-          : 'Messestandkosten'
+      yearFilter.length > 0 ? `Jahr: ${yearFilter.join(', ')}` : 'Alle Jahre',
+      costTypeFilter.length > 0
+        ? costTypeFilter.map((t) => t === 'participant' ? 'Teilnehmerkosten' : 'Messestandkosten').join(', ')
         : 'Alle Kostenarten',
     ].join(' · ');
 
@@ -436,128 +432,90 @@ export function CostsPage() {
         </div>
       </div>
 
-      {/* Filter-Leiste */}
+      {/* Filter-Leiste mit Multi-Select */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <span className="mr-1 text-xs font-medium text-slate-500">Filter:</span>
         
         {/* Jahr */}
-        <select
-          className={`h-7 rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            yearFilter !== 'all' ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-        >
-          <option value="all">Jahr</option>
-          {yearOptions.map((year) => (
-            <option key={year} value={year}>{year}</option>
-          ))}
-        </select>
+        <MultiSelect
+          options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
+          selected={yearFilter}
+          onChange={setYearFilter}
+          placeholder="Jahr"
+        />
 
         {/* Quartal */}
-        <select
-          className={`h-7 rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            quarterFilter !== 'all' ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={quarterFilter}
-          onChange={(e) => setQuarterFilter(e.target.value === 'all' ? 'all' : Number(e.target.value) as 1 | 2 | 3 | 4)}
-        >
-          <option value="all">Quartal</option>
-          <option value="1">Q1 (Jan-Mär)</option>
-          <option value="2">Q2 (Apr-Jun)</option>
-          <option value="3">Q3 (Jul-Sep)</option>
-          <option value="4">Q4 (Okt-Dez)</option>
-        </select>
+        <MultiSelect
+          options={[
+            { value: '1', label: 'Q1 (Jan-Mär)' },
+            { value: '2', label: 'Q2 (Apr-Jun)' },
+            { value: '3', label: 'Q3 (Jul-Sep)' },
+            { value: '4', label: 'Q4 (Okt-Dez)' },
+          ]}
+          selected={quarterFilter}
+          onChange={setQuarterFilter}
+          placeholder="Quartal"
+        />
 
         {/* Kostenart */}
-        <select
-          className={`h-7 rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            costTypeFilter !== 'all' ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={costTypeFilter}
-          onChange={(e) => setCostTypeFilter(e.target.value as 'all' | 'participant' | 'booth')}
-        >
-          <option value="all">Kostenart</option>
-          <option value="participant">Teilnehmerkosten</option>
-          <option value="booth">Messestandkosten</option>
-        </select>
+        <MultiSelect
+          options={[
+            { value: 'participant', label: 'Teilnehmerkosten' },
+            { value: 'booth', label: 'Messestandkosten' },
+          ]}
+          selected={costTypeFilter}
+          onChange={setCostTypeFilter}
+          placeholder="Kostenart"
+        />
 
         {/* Status */}
-        <select
-          className={`h-7 rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            statusFilter !== 'all'
-              ? statusFilter === 'booked'
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                : statusFilter === 'cancelled'
-                ? 'border-rose-300 bg-rose-50 text-rose-700'
-                : 'border-brand bg-brand/10 text-brand'
-              : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'booked' | 'planned' | 'cancelled' | 'consider')}
-        >
-          <option value="all">Status</option>
-          <option value="booked">Gebucht</option>
-          <option value="planned">Geplant</option>
-          <option value="consider">Bewertung</option>
-          <option value="cancelled">Abgesagt</option>
-        </select>
+        <MultiSelect
+          options={[
+            { value: 'booked', label: 'Gebucht' },
+            { value: 'planned', label: 'Geplant' },
+            { value: 'consider', label: 'Bewertung' },
+            { value: 'cancelled', label: 'Abgesagt' },
+          ]}
+          selected={statusFilter}
+          onChange={setStatusFilter}
+          placeholder="Status"
+        />
 
         {/* Veranstalter */}
-        <select
-          className={`h-7 max-w-[140px] truncate rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            organizerFilter ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={organizerFilter}
-          onChange={(e) => setOrganizerFilter(e.target.value)}
-        >
-          <option value="">Veranstalter</option>
-          {organizerOptions.map((org) => (
-            <option key={org} value={org}>{org}</option>
-          ))}
-        </select>
+        <MultiSelect
+          options={organizerOptions.map((o) => ({ value: o, label: o }))}
+          selected={organizerFilter}
+          onChange={setOrganizerFilter}
+          placeholder="Veranstalter"
+        />
 
         {/* Stadt */}
-        <select
-          className={`h-7 max-w-[120px] truncate rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            cityFilter ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={cityFilter}
-          onChange={(e) => setCityFilter(e.target.value)}
-        >
-          <option value="">Stadt</option>
-          {cityOptions.map((city) => (
-            <option key={city} value={city}>{city}</option>
-          ))}
-        </select>
+        <MultiSelect
+          options={cityOptions.map((c) => ({ value: c, label: c }))}
+          selected={cityFilter}
+          onChange={setCityFilter}
+          placeholder="Stadt"
+        />
 
         {/* Kolleg:in */}
-        <select
-          className={`h-7 max-w-[120px] truncate rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            colleagueFilter ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={colleagueFilter}
-          onChange={(e) => setColleagueFilter(e.target.value)}
-        >
-          <option value="">Kolleg:in</option>
-          {colleagueOptions.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <MultiSelect
+          options={colleagueOptions.map((c) => ({ value: c, label: c }))}
+          selected={colleagueFilter}
+          onChange={setColleagueFilter}
+          placeholder="Kolleg:in"
+        />
 
         {/* Kostenbereich */}
-        <select
-          className={`h-7 rounded-full border px-2.5 text-xs font-medium shadow-sm ${
-            costRangeFilter !== 'all' ? 'border-brand bg-brand/10 text-brand' : 'border-slate-200 bg-white text-slate-700'
-          }`}
-          value={costRangeFilter}
-          onChange={(e) => setCostRangeFilter(e.target.value as 'all' | 'low' | 'medium' | 'high')}
-        >
-          <option value="all">Kostenbereich</option>
-          <option value="low">Unter 500 €</option>
-          <option value="medium">500 – 2.000 €</option>
-          <option value="high">Über 2.000 €</option>
-        </select>
+        <MultiSelect
+          options={[
+            { value: 'low', label: 'Unter 500 €' },
+            { value: 'medium', label: '500 – 2.000 €' },
+            { value: 'high', label: 'Über 2.000 €' },
+          ]}
+          selected={costRangeFilter}
+          onChange={setCostRangeFilter}
+          placeholder="Kostenbereich"
+        />
 
         {/* Reset Button */}
         {activeFilterCount > 0 && (
@@ -580,7 +538,7 @@ export function CostsPage() {
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Gesamtkosten</div>
           <div className="mt-1 text-2xl font-bold text-slate-900">{formatEuro(totalCost)}</div>
           <div className="mt-1 text-xs text-slate-500">
-            {yearFilter !== 'all' ? `Jahr ${yearFilter}` : 'Alle Jahre'}
+            {yearFilter.length > 0 ? `Jahr ${yearFilter.join(', ')}` : 'Alle Jahre'}
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
