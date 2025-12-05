@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import { useTheme } from '../../features/theme/ThemeProvider';
@@ -26,6 +26,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSettingPassword, setIsSettingPassword] = useState(false);
 
+  // Automatisch Passwort-Modal öffnen wenn User noch kein Passwort hat
+  useEffect(() => {
+    if (profile && !profile.hasPassword && !showPasswordModal) {
+      // Kurze Verzögerung damit die Seite erst lädt
+      const timer = setTimeout(() => {
+        setShowPasswordModal(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [profile?.hasPassword]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
@@ -46,13 +57,29 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     setIsSettingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
+      // 1. Passwort in Supabase Auth setzen
+      const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
+      if (authError) throw authError;
       
-      toast.success('Passwort erfolgreich gesetzt!');
+      // 2. has_password Flag in der Datenbank setzen
+      if (profile) {
+        const { error: dbError } = await supabase
+          .from('users')
+          .update({ has_password: true })
+          .eq('id', profile.id);
+        
+        if (dbError) {
+          console.error('Fehler beim Aktualisieren des Passwort-Status:', dbError);
+        }
+      }
+      
+      toast.success('Passwort erfolgreich gesetzt! Du kannst dich jetzt mit E-Mail und Passwort anmelden.');
       setShowPasswordModal(false);
       setNewPassword('');
       setConfirmPassword('');
+      
+      // Seite neu laden um Profile zu aktualisieren
+      window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Fehler beim Setzen des Passworts');
     } finally {

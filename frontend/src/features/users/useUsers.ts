@@ -8,6 +8,7 @@ export interface UserRow {
   email: string;
   name: string | null;
   role: AppRole;
+  has_password: boolean;
   created_at: string;
 }
 
@@ -17,7 +18,7 @@ export function useUsers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('users')
-        .select('id, external_id, email, name, role, created_at')
+        .select('id, external_id, email, name, role, has_password, created_at')
         .order('created_at', { ascending: true });
 
       if (error) {

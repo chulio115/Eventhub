@@ -9,6 +9,7 @@ export interface AppUser {
   email: string;
   name: string | null;
   role: AppRole;
+  hasPassword: boolean;
 }
 
 interface AuthContextValue {
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function fetchProfile(user: User) {
       const { data, error } = await supabase
         .from('users')
-        .select('id, email, name, role')
+        .select('id, email, name, role, has_password')
         .eq('external_id', user.id)
         .maybeSingle();
 
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: data.email,
         name: data.name,
         role: data.role,
+        hasPassword: data.has_password ?? false,
       });
     }
 
