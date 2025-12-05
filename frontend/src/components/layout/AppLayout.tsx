@@ -27,15 +27,19 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   // Automatisch Passwort-Modal öffnen wenn User noch kein Passwort hat
+  // Aber nur einmal pro Session (nicht bei jedem Refresh)
   useEffect(() => {
-    if (profile && !profile.hasPassword && !showPasswordModal) {
+    const dismissedKey = `password_modal_dismissed_${profile?.id}`;
+    const wasDismissed = sessionStorage.getItem(dismissedKey);
+    
+    if (profile && !profile.hasPassword && !showPasswordModal && !wasDismissed) {
       // Kurze Verzögerung damit die Seite erst lädt
       const timer = setTimeout(() => {
         setShowPasswordModal(true);
-      }, 500);
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [profile?.hasPassword]);
+  }, [profile?.id, profile?.hasPassword]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -322,7 +326,12 @@ export function AppLayout({ children }: AppLayoutProps) {
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Passwort setzen</h3>
               <button
                 type="button"
-                onClick={() => setShowPasswordModal(false)}
+                onClick={() => {
+                  if (profile?.id) {
+                    sessionStorage.setItem(`password_modal_dismissed_${profile.id}`, 'true');
+                  }
+                  setShowPasswordModal(false);
+                }}
                 className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -365,11 +374,17 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowPasswordModal(false)}
+                  onClick={() => {
+                    // Merken, dass der User das Modal geschlossen hat (für diese Session)
+                    if (profile?.id) {
+                      sessionStorage.setItem(`password_modal_dismissed_${profile.id}`, 'true');
+                    }
+                    setShowPasswordModal(false);
+                  }}
                   className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
                   disabled={isSettingPassword}
                 >
-                  Abbrechen
+                  Später
                 </button>
                 <button
                   type="submit"

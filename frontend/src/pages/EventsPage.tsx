@@ -117,6 +117,29 @@ function ensureHttpUrl(value: string): string {
   return `https://${trimmed}`;
 }
 
+// Extrahiert den lesbaren Dateinamen aus einer URL oder einem Pfad
+function extractFileName(urlOrPath: string): string {
+  try {
+    // Versuche URL zu parsen
+    const url = new URL(urlOrPath);
+    const pathParts = url.pathname.split('/');
+    const fileName = pathParts[pathParts.length - 1];
+    
+    // Entferne Timestamp-Prefix (z.B. "1701234567890-")
+    const withoutTimestamp = fileName.replace(/^\d{13,}-/, '');
+    
+    // Dekodiere URL-encodierte Zeichen und ersetze Unterstriche durch Leerzeichen
+    const decoded = decodeURIComponent(withoutTimestamp);
+    
+    return decoded || fileName || urlOrPath;
+  } catch {
+    // Falls keine gültige URL, versuche einfach den letzten Teil zu nehmen
+    const parts = urlOrPath.split('/');
+    const lastPart = parts[parts.length - 1];
+    return lastPart.replace(/^\d{13,}-/, '') || urlOrPath;
+  }
+}
+
 type UiStatus = 'bewertung' | 'geplant' | 'gebucht' | 'abgesagt';
 type StatusFilter = 'all' | UiStatus;
 type YearFilter = 'all' | number;
@@ -183,20 +206,35 @@ export function EventsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading, error } = useEvents();
   const events: EventRow[] = data ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  
+  // selectedId aus URL lesen (persistiert bei Refresh)
+  const selectedIdFromUrl = searchParams.get('id');
+  const [selectedId, setSelectedIdState] = useState<string | null>(selectedIdFromUrl);
 
-  // URL-Parameter verarbeiten: Event aus URL auswählen
+  // Wrapper-Funktion: Setzt selectedId und aktualisiert URL
+  function setSelectedId(id: string | null) {
+    setSelectedIdState(id);
+    if (id) {
+      setSearchParams({ id }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }
+
+  // URL-Parameter verarbeiten: Event aus URL auswählen (bei Pageload)
   useEffect(() => {
     const idFromUrl = searchParams.get('id');
     if (idFromUrl && events.length > 0) {
       const eventExists = events.some((e) => e.id === idFromUrl);
-      if (eventExists) {
-        setSelectedId(idFromUrl);
-        // Parameter aus URL entfernen, damit Refresh nicht nötig
+      if (eventExists && selectedId !== idFromUrl) {
+        setSelectedIdState(idFromUrl);
+      } else if (!eventExists) {
+        // Event existiert nicht mehr - URL bereinigen
         setSearchParams({}, { replace: true });
+        setSelectedIdState(null);
       }
     }
-  }, [searchParams, events, setSearchParams]);
+  }, [events]);
   const [showCreate, setShowCreate] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -1321,22 +1359,42 @@ export function EventsPage() {
                       />
                       {attachmentLinkLines.length > 0 && (
                         <div className="mt-3 space-y-1.5">
-                          <div className="text-[11px] font-medium text-slate-500">Gespeicherte Links:</div>
-                          {attachmentLinkLines.map((link) => (
-                            <a
-                              key={link}
-                              href={ensureHttpUrl(link)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-2 truncate text-xs text-brand hover:underline"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                              </svg>
-                              <span className="truncate">{link}</span>
-                            </a>
-                          ))}
+                          <div className="text-[11px] font-medium text-slate-500">
+                            Hochgeladene Dokumente ({attachmentLinkLines.length}):
+                          </div>
+                          {attachmentLinkLines.map((link) => {
+                            const fileName = extractFileName(link);
+                            const isPdf = fileName.toLowerCase().endsWith('.pdf');
+                            return (
+                              <a
+                                key={link}
+                                href={ensureHttpUrl(link)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 transition-colors hover:border-brand/30 hover:bg-brand/5 hover:text-brand"
+                              >
+                                {isPdf ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <path d="M9 15h6" />
+                                    <path d="M9 11h6" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                  </svg>
+                                )}
+                                <span className="flex-1 truncate font-medium">{fileName}</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                  <polyline points="15 3 21 3 21 9" />
+                                  <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                              </a>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
