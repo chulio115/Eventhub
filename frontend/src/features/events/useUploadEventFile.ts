@@ -53,10 +53,22 @@ export function useUploadEventFile() {
         throw new Error(`Upload fehlgeschlagen: ${error.message}`);
       }
 
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      // Signed URL generieren (1 Jahr gültig) - funktioniert auch bei nicht-public Buckets
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, 60 * 60 * 24 * 365); // 365 Tage
+
+      if (signedError || !signedData?.signedUrl) {
+        // Fallback auf public URL
+        const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+        return {
+          publicUrl: publicData.publicUrl,
+          path,
+        };
+      }
 
       return {
-        publicUrl: data.publicUrl,
+        publicUrl: signedData.signedUrl,
         path,
       };
     },

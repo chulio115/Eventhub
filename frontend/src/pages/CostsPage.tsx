@@ -228,12 +228,15 @@ export function CostsPage() {
     const totalParticipants = filteredRows.reduce((sum, row) => sum + (row.colleagues_count ?? 0), 0);
     const totalCost = filteredRows.reduce((sum, row) => sum + (row.total_cost ?? 0), 0);
     
-    // Teilnehmerkosten vs Messestandkosten
+    // Teilnehmerkosten vs Messestandkosten vs Sponsoring
     const participantCosts = filteredRows
       .filter((r) => r.cost_type === 'participant')
       .reduce((sum, row) => sum + (row.total_cost ?? 0), 0);
     const boothCosts = filteredRows
       .filter((r) => r.cost_type === 'booth')
+      .reduce((sum, row) => sum + (row.total_cost ?? 0), 0);
+    const sponsoringCosts = filteredRows
+      .filter((r) => r.cost_type === 'sponsoring')
       .reduce((sum, row) => sum + (row.total_cost ?? 0), 0);
     
     // Durchschnittswerte
@@ -309,7 +312,7 @@ export function CostsPage() {
       datum: formatDateForExport(row.start_date),
       veranstalter: row.organizer ?? '',
       teilnehmer: row.colleagues_count ?? 0,
-      kostenart: row.cost_type === 'participant' ? 'Teilnehmerkosten' : 'Messestandkosten',
+      kostenart: row.cost_type === 'participant' ? 'Teilnehmerkosten' : row.cost_type === 'booth' ? 'Standkosten' : 'Sponsoring',
       einzelpreis: formatCurrencyForExport(row.cost_value),
       gesamtkosten: formatCurrencyForExport(row.total_cost),
       kostenProTN: formatCurrencyForExport(row.cost_per_participant),
@@ -358,7 +361,7 @@ export function CostsPage() {
         date: formatDateForExport(row.start_date),
         organizer: row.organizer ?? '',
         participants: row.colleagues_count ?? 0,
-        costType: row.cost_type === 'participant' ? 'Teilnehmerkosten' : 'Messestandkosten',
+        costType: row.cost_type === 'participant' ? 'Teilnehmerkosten' : row.cost_type === 'booth' ? 'Standkosten' : 'Sponsoring',
         totalCost: row.total_cost ?? 0,
         costPerParticipant: row.cost_per_participant ?? 0,
       })),
@@ -461,7 +464,8 @@ export function CostsPage() {
         <MultiSelect
           options={[
             { value: 'participant', label: 'Teilnehmerkosten' },
-            { value: 'booth', label: 'Messestandkosten' },
+            { value: 'booth', label: 'Standkosten' },
+            { value: 'sponsoring', label: 'Sponsoring' },
           ]}
           selected={costTypeFilter}
           onChange={setCostTypeFilter}
@@ -808,7 +812,7 @@ export function CostsPage() {
               <div className="rounded-lg bg-slate-50 p-3">
                 <div className="text-xs text-slate-500">Kostenart</div>
                 <div className="text-sm font-medium text-slate-900">
-                  {selectedEvent.cost_type === 'participant' ? 'Teilnehmerkosten' : 'Messestandkosten'}
+                  {selectedEvent.cost_type === 'participant' ? 'Teilnehmerkosten' : selectedEvent.cost_type === 'booth' ? 'Standkosten' : 'Sponsoring'}
                 </div>
               </div>
             </div>

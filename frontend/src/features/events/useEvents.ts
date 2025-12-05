@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabaseClient';
 
 export type EventStatus = 'planned' | 'consider' | 'attended' | 'cancelled';
-export type CostType = 'participant' | 'booth';
+export type CostType = 'participant' | 'booth' | 'sponsoring';
 
 export interface EventRow {
   id: string;

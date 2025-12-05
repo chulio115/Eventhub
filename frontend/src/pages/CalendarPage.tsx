@@ -388,7 +388,7 @@ export function CalendarPage() {
                   </svg>
                   <span className="text-slate-700">
                     {selectedEvent.cost_value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
-                    {selectedEvent.cost_type === 'booth' ? ' (Standkosten)' : ' / Person'}
+                    {selectedEvent.cost_type === 'participant' ? ' / Person' : selectedEvent.cost_type === 'booth' ? ' (Standkosten)' : ' (Sponsoring)'}
                   </span>
                 </div>
               )}

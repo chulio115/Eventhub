@@ -1302,6 +1302,7 @@ export function EventsPage() {
                         >
                           <option value="participant">Teilnehmerkosten</option>
                           <option value="booth">Standkosten</option>
+                          <option value="sponsoring">Sponsoring</option>
                         </select>
                       </div>
                     </div>
@@ -1440,7 +1441,7 @@ export function EventsPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
+                      <div className="max-h-[180px] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
                         {isHistoryLoading && (
                           <div className="text-slate-400">Lade Historie…</div>
                         )}

@@ -9,7 +9,7 @@ export type EventCostRow = {
   status: 'planned' | 'attended' | 'cancelled' | 'consider';
   booked: boolean;
   start_date: string | null;
-  cost_type: 'participant' | 'booth';
+  cost_type: 'participant' | 'booth' | 'sponsoring';
   cost_value: number;
   colleagues: string[];
   colleagues_count: number;
@@ -41,13 +41,14 @@ export function useEventCosts() {
         let totalCost = 0;
         if (row.cost_type === 'participant') {
           totalCost = costValue * Math.max(colleaguesCount, 0);
-        } else if (row.cost_type === 'booth') {
+        } else if (row.cost_type === 'booth' || row.cost_type === 'sponsoring') {
+          // Standkosten und Sponsoring sind Fixbeträge
           totalCost = costValue;
         }
         
         // Kosten pro Teilnehmer
         let costPerParticipant = 0;
-        if (row.cost_type === 'booth' && colleaguesCount > 0) {
+        if ((row.cost_type === 'booth' || row.cost_type === 'sponsoring') && colleaguesCount > 0) {
           costPerParticipant = costValue / colleaguesCount;
         } else if (row.cost_type === 'participant' && colleaguesCount > 0) {
           costPerParticipant = costValue;
