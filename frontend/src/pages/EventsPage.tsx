@@ -1,11 +1,23 @@
 import { FormEvent, useEffect, useState, useRef, ChangeEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useEvents, type EventRow } from '../features/events/useEvents';
 import { useCreateEvent } from '../features/events/useCreateEvent';
 import { useUpdateEvent } from '../features/events/useUpdateEvent';
+import { useDeleteEvent } from '../features/events/useDeleteEvent';
 import { useEventHistory, useAddHistoryEntry } from '../features/events/useEventHistory';
 import { useUploadEventFile } from '../features/events/useUploadEventFile';
+
+function copyEventLink(eventId: string) {
+  const url = `${window.location.origin}/events?id=${eventId}`;
+  navigator.clipboard.writeText(url).then(() => {
+    toast.success('Link kopiert!');
+  }).catch(() => {
+    toast.error('Link konnte nicht kopiert werden');
+  });
+}
 
 function formatDate(value: string | null) {
   if (!value) return '';
@@ -32,7 +44,7 @@ function ensureHttpUrl(value: string): string {
 
 type UiStatus = 'bewertung' | 'geplant' | 'gebucht' | 'abgesagt';
 type StatusFilter = 'all' | UiStatus;
-type DateFilter = 'all' | 'upcoming' | 'past';
+type YearFilter = 'all' | number;
 
 function mapToUiStatus(status: EventRow['status'], booked: boolean): UiStatus {
   if (status === 'cancelled') return 'abgesagt';
@@ -58,13 +70,27 @@ function mapFromUiStatus(ui: UiStatus): { status: EventRow['status']; booked: bo
 }
 
 export function EventsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading, error } = useEvents();
   const events: EventRow[] = data ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // URL-Parameter verarbeiten: Event aus URL auswählen
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl && events.length > 0) {
+      const eventExists = events.some((e) => e.id === idFromUrl);
+      if (eventExists) {
+        setSelectedId(idFromUrl);
+        // Parameter aus URL entfernen, damit Refresh nicht nötig
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, events, setSearchParams]);
   const [showCreate, setShowCreate] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [yearFilter, setYearFilter] = useState<YearFilter>('all');
   const [organizerFilter, setOrganizerFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [colleagueFilter, setColleagueFilter] = useState('');
@@ -76,6 +102,8 @@ export function EventsPage() {
   const [newCostValue, setNewCostValue] = useState('');
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
+  const deleteEvent = useDeleteEvent();
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const [draftTitle, setDraftTitle] = useState('');
   const [draftStatus, setDraftStatus] = useState<EventRow['status']>('planned');
@@ -124,21 +152,30 @@ export function EventsPage() {
   });
   const tagOptions = Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'de-DE'));
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
+  // Jahr-Optionen aus Events extrahieren
+  const yearSet = new Set<number>();
+  events.forEach((e) => {
+    const dateStr = e.start_date ?? e.end_date;
+    if (dateStr) {
+      const year = new Date(dateStr).getFullYear();
+      if (!Number.isNaN(year)) yearSet.add(year);
+    }
+  });
+  const yearOptions = Array.from(yearSet).sort((a, b) => b - a); // Neueste zuerst
 
-  const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const filteredEvents = events.filter((event) => {
     const uiStatus = mapToUiStatus(event.status, event.booked);
 
     if (statusFilter !== 'all' && uiStatus !== statusFilter) return false;
 
-    // Datumsfilter (basierend auf Startdatum, Fallback auf Enddatum)
+    // Jahresfilter (basierend auf Startdatum, Fallback auf Enddatum)
     const eventDate = event.start_date ?? event.end_date ?? null;
-
-    if (dateFilter === 'upcoming' && eventDate && eventDate < todayIso) return false;
-    if (dateFilter === 'past' && eventDate && eventDate >= todayIso) return false;
+    if (yearFilter !== 'all' && eventDate) {
+      const eventYear = new Date(eventDate).getFullYear();
+      if (eventYear !== yearFilter) return false;
+    }
 
     if (normalizedSearch) {
       const haystack = [
@@ -196,10 +233,6 @@ export function EventsPage() {
     .filter(Boolean);
 
   const attachmentLinkLines = normalizedDraftAttachments;
-
-  const pdfAttachmentLinks = attachmentLinkLines.filter((link) =>
-    link.toLowerCase().includes('.pdf'),
-  );
 
   const draftCostNumeric = Number(draftCostValue.replace(',', '.')) || 0;
 
@@ -501,6 +534,19 @@ export function EventsPage() {
     void handleSaveSelected(true);
   }
 
+  async function handleDeleteEvent() {
+    if (!deleteConfirmId) return;
+    try {
+      await deleteEvent.mutateAsync(deleteConfirmId);
+      setDeleteConfirmId(null);
+      if (selectedId === deleteConfirmId) {
+        setSelectedId(null);
+      }
+    } catch {
+      // Fehlerbehandlung später
+    }
+  }
+
   return (
     <div className="flex min-h-0 w-full flex-col space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -516,7 +562,7 @@ export function EventsPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           >
-            <option value="all">Alle Stati</option>
+            <option value="all">Status</option>
             <option value="bewertung">Bewertung</option>
             <option value="geplant">Geplant</option>
             <option value="gebucht">Gebucht</option>
@@ -524,12 +570,15 @@ export function EventsPage() {
           </select>
           <select
             className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
           >
-            <option value="all">Alle Termine</option>
-            <option value="upcoming">Nur kommende</option>
-            <option value="past">Nur vergangene</option>
+            <option value="all">Jahr</option>
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
           </select>
         </div>
         <Button type="button" onClick={() => setShowCreate((v) => !v)}>
@@ -642,9 +691,9 @@ export function EventsPage() {
         </select>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" style={{ maxHeight: 'calc(100vh - 12rem)' }}>
         {/* Linke Spalte: Event-Liste */}
-        <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex max-h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Events (Liste)
           </div>
@@ -758,17 +807,77 @@ export function EventsPage() {
         <div className="flex flex-col space-y-4">
           <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <span>Event-Management</span>
+              <div className="flex items-center gap-3">
+                <span>Event-Management</span>
+                {selectedEvent && (
+                  <select
+                    className={`cursor-pointer appearance-none rounded-full border px-3 py-1 pr-7 text-xs font-semibold normal-case tracking-normal ${
+                      draftUiStatus === 'bewertung'
+                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                        : draftUiStatus === 'geplant'
+                        ? 'border-sky-200 bg-sky-50 text-sky-700'
+                        : draftUiStatus === 'gebucht'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-rose-200 bg-rose-50 text-rose-700'
+                    }`}
+                    value={draftUiStatus}
+                    onChange={(e) => {
+                      const mapped = mapFromUiStatus(e.target.value as UiStatus);
+                      setDraftStatus(mapped.status);
+                      setDraftBooked(mapped.booked);
+                    }}
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 6px center',
+                      backgroundSize: '14px',
+                    }}
+                  >
+                    <option value="bewertung">Bewertung</option>
+                    <option value="geplant">Geplant</option>
+                    <option value="gebucht">Gebucht</option>
+                    <option value="abgesagt">Abgesagt</option>
+                  </select>
+                )}
+              </div>
               {selectedEvent && (
-                <Button
-                  type="button"
-                  variant={hasChanges ? 'primary' : 'secondary'}
-                  className="h-8 px-3 text-xs"
-                  onClick={handleSaveSelectedClick}
-                  disabled={updateEvent.isPending || !hasChanges}
-                >
-                  {updateEvent.isPending ? 'Speichere…' : 'Änderungen speichern'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyEventLink(selectedEvent.id)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700"
+                    title="Link kopieren"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                      <polyline points="16 6 12 2 8 6" />
+                      <line x1="12" y1="2" x2="12" y2="15" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmId(selectedEvent.id)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 shadow-sm transition-colors hover:bg-rose-50 hover:text-rose-600"
+                    title="Event löschen"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
+                  <Button
+                    type="button"
+                    variant={hasChanges ? 'primary' : 'secondary'}
+                    className="h-8 px-3 text-xs"
+                    onClick={handleSaveSelectedClick}
+                    disabled={updateEvent.isPending || !hasChanges}
+                  >
+                    {updateEvent.isPending ? 'Speichere…' : 'Änderungen speichern'}
+                  </Button>
+                </div>
               )}
             </div>
             <div className="flex-1 overflow-y-auto">
@@ -782,31 +891,22 @@ export function EventsPage() {
                         onChange={(e) => setDraftTitle(e.target.value)}
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">Veranstalter</label>
-                        <Input
-                          value={draftOrganizer}
-                          onChange={(e) => setDraftOrganizer(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">Status</label>
-                        <select
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm"
-                          value={draftUiStatus}
-                          onChange={(e) => {
-                            const mapped = mapFromUiStatus(e.target.value as UiStatus);
-                            setDraftStatus(mapped.status);
-                            setDraftBooked(mapped.booked);
-                          }}
-                        >
-                          <option value="bewertung">Bewertung</option>
-                          <option value="geplant">Geplant</option>
-                          <option value="gebucht">Gebucht</option>
-                          <option value="abgesagt">Abgesagt</option>
-                        </select>
-                      </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Veranstalter</label>
+                      <Input
+                        value={draftOrganizer}
+                        onChange={(e) => setDraftOrganizer(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        Tags (z. B. Verband, Kongress)
+                      </label>
+                      <Input
+                        value={draftTags}
+                        onChange={(e) => setDraftTags(e.target.value)}
+                        placeholder="Verband, Kongress"
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -846,27 +946,15 @@ export function EventsPage() {
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Kolleg:innen (Komma-getrennt)
-                        </label>
-                        <Input
-                          value={draftColleagues}
-                          onChange={(e) => setDraftColleagues(e.target.value)}
-                          placeholder="z. B. Yannik, Daniel"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Tags (z. B. Verband, Kongress)
-                        </label>
-                        <Input
-                          value={draftTags}
-                          onChange={(e) => setDraftTags(e.target.value)}
-                          placeholder="Verband, Kongress"
-                        />
-                      </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        Kolleg:innen (Komma-getrennt)
+                      </label>
+                      <Input
+                        value={draftColleagues}
+                        onChange={(e) => setDraftColleagues(e.target.value)}
+                        placeholder="z. B. Yannik, Daniel"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-700">
@@ -877,6 +965,20 @@ export function EventsPage() {
                         onChange={(e) => setDraftLinkedinNote(e.target.value)}
                         placeholder="z. B. 10.03. | Recap-Post"
                       />
+                    </div>
+                    <div className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                        checked={draftPublicationStatus}
+                        onChange={(e) => setDraftPublicationStatus(e.target.checked)}
+                      />
+                      <div className="leading-snug">
+                        <div className="text-xs font-medium text-slate-700">Website: Teilnahme veröffentlicht</div>
+                        <div className="text-[11px] text-slate-500">
+                          Häkchen, wenn die Teilnahme auf der Website steht.
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -938,50 +1040,19 @@ export function EventsPage() {
                         value={draftAttachments}
                         onChange={(e) => setDraftAttachments(e.target.value)}
                       />
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700">
-                        <div className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            className="mt-1 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-                            checked={draftPublicationStatus}
-                            onChange={(e) => setDraftPublicationStatus(e.target.checked)}
-                          />
-                          <div className="leading-snug">
-                            <div className="font-medium">Website: Teilnahme veröffentlicht</div>
-                            <div className="text-[11px] text-slate-500">
-                              Häkchen, wenn die Teilnahme auf der Website steht.
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-1 flex-wrap items-center justify-center gap-2">
-                          {pdfAttachmentLinks.slice(0, 3).map((link, index) => (
-                            <a
-                              key={link}
-                              href={ensureHttpUrl(link)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                            >
-                              PDF {index + 1}
-                            </a>
-                          ))}
-                        </div>
-
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="h-8 px-3 text-xs"
-                            onClick={handleFileButtonClick}
-                            disabled={!selectedEvent || uploadFile.isPending}
-                          >
-                            {uploadFile.isPending ? 'Lade hoch…' : 'PDF hochladen'}
-                          </Button>
-                          <span className="hidden md:inline">
-                            Wird als Link im Feld oben gespeichert.
-                          </span>
-                        </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 px-3 text-xs"
+                          onClick={handleFileButtonClick}
+                          disabled={!selectedEvent || uploadFile.isPending}
+                        >
+                          {uploadFile.isPending ? 'Lade hoch…' : 'PDF hochladen'}
+                        </Button>
+                        <span className="text-[11px] text-slate-500">
+                          Wird als Link im Feld oben gespeichert.
+                        </span>
                       </div>
                       <input
                         ref={fileInputRef}
@@ -991,16 +1062,21 @@ export function EventsPage() {
                         onChange={handleFileInputChange}
                       />
                       {attachmentLinkLines.length > 0 && (
-                        <div className="mt-2 space-y-1 text-[11px]">
+                        <div className="mt-3 space-y-1.5">
+                          <div className="text-[11px] font-medium text-slate-500">Gespeicherte Links:</div>
                           {attachmentLinkLines.map((link) => (
                             <a
                               key={link}
                               href={ensureHttpUrl(link)}
                               target="_blank"
                               rel="noreferrer"
-                              className="block truncate text-brand hover:underline"
+                              className="flex items-center gap-2 truncate text-xs text-brand hover:underline"
                             >
-                              {link}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                              </svg>
+                              <span className="truncate">{link}</span>
                             </a>
                           ))}
                         </div>
@@ -1073,6 +1149,36 @@ export function EventsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold text-slate-900">Event löschen?</h3>
+            <p className="mb-6 text-sm text-slate-500">
+              Das Event wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleteConfirmId(null)}
+                disabled={deleteEvent.isPending}
+              >
+                Abbrechen
+              </Button>
+              <button
+                type="button"
+                onClick={handleDeleteEvent}
+                disabled={deleteEvent.isPending}
+                className="inline-flex items-center justify-center rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleteEvent.isPending ? 'Lösche…' : 'Löschen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

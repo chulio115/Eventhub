@@ -1,11 +1,36 @@
+import { useState, FormEvent } from 'react';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUsers } from '../features/users/useUsers';
 import { useUpdateUserRole } from '../features/users/useUpdateUserRole';
+import { useInviteUser } from '../features/users/useInviteUser';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 
 export function UserManagementPage() {
   const { profile } = useAuth();
   const { data: users = [], isLoading, error } = useUsers();
   const updateRole = useUpdateUserRole();
+  const inviteUser = useInviteUser();
+
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  async function handleInvite(e: FormEvent) {
+    e.preventDefault();
+    setInviteSuccess(null);
+    setInviteError(null);
+
+    if (!inviteEmail.trim()) return;
+
+    try {
+      await inviteUser.mutateAsync({ email: inviteEmail.trim() });
+      setInviteSuccess(`Einladung an ${inviteEmail} wurde versendet.`);
+      setInviteEmail('');
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Einladung fehlgeschlagen');
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -13,6 +38,46 @@ export function UserManagementPage() {
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Benutzerverwaltung</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Nutzer:innen verwalten und Rollen (Admin, User, Extern) setzen. Änderungen wirken direkt in Supabase.
+        </p>
+      </div>
+
+      {/* Invite-Formular */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-50">
+          Neuen Benutzer einladen
+        </h2>
+        <form onSubmit={handleInvite} className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+              E-Mail-Adresse (@immomio.de)
+            </label>
+            <Input
+              type="email"
+              placeholder="vorname.nachname@immomio.de"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              required
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={inviteUser.isPending || !inviteEmail.trim()}
+          >
+            {inviteUser.isPending ? 'Sende…' : 'Einladung senden'}
+          </Button>
+        </form>
+        {inviteSuccess && (
+          <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+            {inviteSuccess}
+          </div>
+        )}
+        {inviteError && (
+          <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+            {inviteError}
+          </div>
+        )}
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          Der eingeladene Benutzer erhält einen Magic Link per E-Mail und wird bei erstmaliger Anmeldung automatisch registriert.
         </p>
       </div>
 

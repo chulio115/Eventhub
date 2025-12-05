@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -14,7 +16,12 @@ export function SettingsPage() {
           <p className="mb-3 text-xs text-slate-500">
             Nutzer:innen verwalten, Rollen (Admin, User, Extern) setzen und Zugriffe steuern.
           </p>
-          <p className="text-xs text-slate-400">Navigation: Menüpunkt &bdquo;Benutzer&ldquo; folgt als eigener Screen.</p>
+          <Link
+            to="/settings/users"
+            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900"
+          >
+            Benutzerverwaltung öffnen
+          </Link>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

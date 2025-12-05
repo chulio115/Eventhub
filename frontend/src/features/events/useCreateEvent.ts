@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
 import type { CostType } from './useEvents';
 
@@ -39,6 +40,10 @@ export function useCreateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast.success('Event wurde erstellt');
+    },
+    onError: (error) => {
+      toast.error(`Fehler beim Erstellen: ${error.message}`);
     },
   });
 }

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
 import type { EventStatus, CostType } from './useEvents';
 
@@ -57,6 +58,10 @@ export function useUpdateEvent() {
       });
 
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast.success('Änderungen gespeichert');
+    },
+    onError: (error) => {
+      toast.error(`Fehler beim Speichern: ${error.message}`);
     },
   });
 }

@@ -1,4 +1,4 @@
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
@@ -16,11 +16,13 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { profile, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    navigate('/login', { replace: true });
   }
 
   const showChrome = !location.pathname.startsWith('/share/');
@@ -45,6 +47,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.to === '/events'}
                   className={({ isActive }) =>
                     `rounded-full px-3 py-1 transition-colors ${
                       isActive
@@ -64,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       `rounded-full px-3 py-1 transition-colors ${
                         isActive
                           ? 'bg-slate-900 text-white shadow-sm'
-                          : 'hover:bg-slate-100 hover:text-slate-900'
+                          : 'hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100'
                       }`
                     }
                   >
@@ -76,7 +79,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       `rounded-full px-3 py-1 transition-colors ${
                         isActive
                           ? 'bg-slate-900 text-white shadow-sm'
-                          : 'hover:bg-slate-100 hover:text-slate-900'
+                          : 'hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100'
                       }`
                     }
                   >
@@ -111,6 +114,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                           : 'User'}
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    Logout
+                  </button>
                 </div>
               )}
             </div>
