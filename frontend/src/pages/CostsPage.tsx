@@ -337,9 +337,27 @@ export function CostsPage() {
     const filterInfo = [
       yearFilter.length > 0 ? `Jahr: ${yearFilter.join(', ')}` : 'Alle Jahre',
       costTypeFilter.length > 0
-        ? costTypeFilter.map((t) => t === 'participant' ? 'Teilnehmerkosten' : 'Messestandkosten').join(', ')
+        ? costTypeFilter.map((t) => t === 'participant' ? 'Teilnehmerkosten' : t === 'booth' ? 'Standkosten' : 'Sponsoring').join(', ')
         : 'Alle Kostenarten',
     ].join(' · ');
+
+    // Calculate percentages for organizers
+    const totalOrgSum = byOrganizer.reduce((sum, o) => sum + o.sum, 0);
+    const byOrganizerWithPercentage = byOrganizer.map((o) => ({
+      ...o,
+      percentage: totalOrgSum > 0 ? Math.round((o.sum / totalOrgSum) * 100) : 0,
+    }));
+
+    // Cost types data
+    const sponsoringCosts = filteredRows
+      .filter((r) => r.cost_type === 'sponsoring')
+      .reduce((sum, row) => sum + (row.total_cost ?? 0), 0);
+    
+    const costTypesData = [
+      { label: 'Teilnehmerkosten', value: stats.participantCosts, color: '#0ea5e9' },
+      { label: 'Messestandkosten', value: stats.boothCosts, color: '#22c55e' },
+      { label: 'Sponsoring', value: sponsoringCosts, color: '#a855f7' },
+    ].filter((d) => d.value > 0);
 
     const reportData: CostReportData = {
       title: 'EventHub Kostenreport',
@@ -355,7 +373,11 @@ export function CostsPage() {
         totalEvents,
         totalParticipants,
         totalCost,
+        avgCostPerEvent: stats.avgCostPerEvent,
+        avgParticipantsPerEvent: stats.avgParticipantsPerEvent,
+        costPerParticipant: stats.avgCostPerParticipant,
       },
+      costTypes: costTypesData,
       events: sortedEvents.map((row) => ({
         title: row.title,
         date: formatDateForExport(row.start_date),
@@ -365,7 +387,7 @@ export function CostsPage() {
         totalCost: row.total_cost ?? 0,
         costPerParticipant: row.cost_per_participant ?? 0,
       })),
-      byOrganizer,
+      byOrganizer: byOrganizerWithPercentage,
       byMonth: byMonth.map((m) => ({
         month: m.date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }),
         sum: m.sum,

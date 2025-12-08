@@ -28,6 +28,9 @@ export interface UpdateEventInput {
   rating_kam: number | null;
   rating_marketing: number | null;
   rating_clevel: number | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 }
 
 export function useUpdateEvent() {

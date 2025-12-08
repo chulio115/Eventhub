@@ -95,7 +95,11 @@ export interface CostReportData {
     totalEvents: number;
     totalParticipants: number;
     totalCost: number;
+    avgCostPerEvent: number;
+    avgParticipantsPerEvent: number;
+    costPerParticipant: number;
   };
+  costTypes: { label: string; value: number; color: string }[];
   events: {
     title: string;
     date: string;
@@ -105,7 +109,7 @@ export interface CostReportData {
     totalCost: number;
     costPerParticipant: number;
   }[];
-  byOrganizer: { organizer: string; sum: number }[];
+  byOrganizer: { organizer: string; sum: number; percentage: number }[];
   byMonth: { month: string; sum: number }[];
 }
 
@@ -113,8 +117,14 @@ export function downloadCostReportPDF(data: CostReportData): void {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   
+  // Helper function to format currency
+  const formatCurrency = (value: number) => new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(value);
+  
   // Header
-  doc.setFontSize(20);
+  doc.setFontSize(22);
   doc.setTextColor(25, 63, 112); // Immomio Indigo
   doc.text('EventHub Kostenreport', 14, 20);
   
@@ -123,30 +133,188 @@ export function downloadCostReportPDF(data: CostReportData): void {
   doc.text(`Erstellt am: ${data.generatedAt}`, 14, 28);
   doc.text(data.filterInfo, 14, 34);
   
-  // Summary Box
-  doc.setFillColor(241, 245, 249); // slate-100
-  doc.roundedRect(14, 40, pageWidth - 28, 20, 3, 3, 'F');
+  // ========== KPI BOXES (4 Boxes) ==========
+  const boxWidth = (pageWidth - 28 - 15) / 4; // 4 boxes with gaps
+  const boxHeight = 28;
+  const boxY = 42;
   
-  doc.setFontSize(11);
-  doc.setTextColor(30, 41, 59); // slate-800
-  doc.text(`${data.summary.totalEvents} Events`, 20, 50);
-  doc.text(`${data.summary.totalParticipants} Teilnahmen`, 70, 50);
+  const kpiBoxes = [
+    { label: 'GESAMTKOSTEN', value: formatCurrency(data.summary.totalCost), sublabel: data.filterInfo.includes('Jahr') ? data.filterInfo.split('·')[0].trim() : 'Alle Jahre' },
+    { label: 'EVENTS', value: data.summary.totalEvents.toString(), sublabel: `Ø ${formatCurrency(data.summary.avgCostPerEvent)} / Event` },
+    { label: 'TEILNAHMEN', value: data.summary.totalParticipants.toString(), sublabel: `Ø ${data.summary.avgParticipantsPerEvent.toFixed(1)} / Event` },
+    { label: 'KOSTEN / TEILNEHMER', value: formatCurrency(data.summary.costPerParticipant), sublabel: 'Durchschnitt pro Person' },
+  ];
   
-  doc.setFontSize(14);
-  doc.setTextColor(25, 63, 112);
-  const totalFormatted = new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(data.summary.totalCost);
-  doc.text(totalFormatted, pageWidth - 14, 52, { align: 'right' });
+  kpiBoxes.forEach((box, i) => {
+    const x = 14 + i * (boxWidth + 5);
+    
+    // Box background
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(x, boxY, boxWidth, boxHeight, 2, 2, 'FD');
+    
+    // Label
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(box.label, x + 4, boxY + 8);
+    
+    // Value
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text(box.value, x + 4, boxY + 18);
+    
+    // Sublabel
+    doc.setFontSize(6);
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text(box.sublabel, x + 4, boxY + 24);
+  });
   
-  // Events Table
-  doc.setFontSize(12);
+  // ========== CHARTS ROW ==========
+  const chartY = boxY + boxHeight + 10;
+  const chartHeight = 45;
+  const chartColWidth = (pageWidth - 28 - 10) / 3;
+  
+  // --- Bar Chart: Kosten nach Monat (letzte 6) ---
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
+  
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('KOSTEN NACH MONAT (LETZTE 6)', 18, chartY + 8);
+  
+  const monthData = data.byMonth.slice(-6);
+  const maxMonthValue = Math.max(...monthData.map(m => m.sum), 1);
+  const barStartY = chartY + 14;
+  const barHeight = 4;
+  const barGap = 1;
+  const maxBarWidth = chartColWidth - 40;
+  
+  monthData.forEach((m, i) => {
+    const y = barStartY + i * (barHeight + barGap);
+    const barWidth = (m.sum / maxMonthValue) * maxBarWidth;
+    
+    // Month label
+    doc.setFontSize(6);
+    doc.setTextColor(100, 116, 139);
+    doc.text(m.month.substring(0, 3), 18, y + 3);
+    
+    // Bar
+    doc.setFillColor(52, 134, 239); // brand blue
+    doc.roundedRect(32, y, Math.max(barWidth, 2), barHeight, 1, 1, 'F');
+    
+    // Value
+    doc.setFontSize(5);
+    doc.setTextColor(71, 85, 105);
+    const valueText = m.sum >= 1000 ? `${(m.sum / 1000).toFixed(1)}k €` : `${m.sum.toFixed(0)} €`;
+    doc.text(valueText, 32 + maxBarWidth + 2, y + 3);
+  });
+  
+  // --- Pie Chart: Top 5 Veranstalter ---
+  const pieX = 14 + chartColWidth + 5;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(pieX, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
+  
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('TOP 5 VERANSTALTER', pieX + 4, chartY + 8);
+  
+  // Simple pie chart representation (as colored dots with legend)
+  const pieColors = [[52, 134, 239], [34, 197, 94], [249, 115, 22], [168, 85, 247], [236, 72, 153]];
+  const top5Organizers = data.byOrganizer.slice(0, 5);
+  const pieCenterX = pieX + 25;
+  const pieCenterY = chartY + 28;
+  const pieRadius = 12;
+  
+  // Draw pie segments (simplified as a donut)
+  let startAngle = -Math.PI / 2;
+  const totalOrgSum = top5Organizers.reduce((sum, o) => sum + o.sum, 0);
+  
+  top5Organizers.forEach((org, i) => {
+    const angle = (org.sum / totalOrgSum) * 2 * Math.PI;
+    const endAngle = startAngle + angle;
+    
+    // Draw arc segment
+    doc.setFillColor(pieColors[i][0], pieColors[i][1], pieColors[i][2]);
+    
+    // Simplified: draw colored circle segments
+    const midAngle = startAngle + angle / 2;
+    const dotX = pieCenterX + Math.cos(midAngle) * (pieRadius - 3);
+    const dotY = pieCenterY + Math.sin(midAngle) * (pieRadius - 3);
+    doc.circle(dotX, dotY, 3, 'F');
+    
+    startAngle = endAngle;
+  });
+  
+  // Center hole (donut effect)
+  doc.setFillColor(248, 250, 252);
+  doc.circle(pieCenterX, pieCenterY, pieRadius - 6, 'F');
+  
+  // Legend
+  const legendX = pieX + 50;
+  top5Organizers.forEach((org, i) => {
+    const y = chartY + 14 + i * 6;
+    doc.setFillColor(pieColors[i][0], pieColors[i][1], pieColors[i][2]);
+    doc.circle(legendX, y, 1.5, 'F');
+    doc.setFontSize(5);
+    doc.setTextColor(71, 85, 105);
+    const label = org.organizer.length > 12 ? org.organizer.substring(0, 12) + '…' : org.organizer;
+    doc.text(`${label} ${org.percentage}%`, legendX + 4, y + 1);
+  });
+  
+  // --- Cost Types Bar ---
+  const costTypeX = pieX + chartColWidth + 5;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(costTypeX, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
+  
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('KOSTENARTEN', costTypeX + 4, chartY + 8);
+  
+  const costTypeColors: Record<string, number[]> = {
+    'Teilnehmerkosten': [14, 165, 233], // sky-500
+    'Messestandkosten': [34, 197, 94], // green-500
+    'Sponsoring': [168, 85, 247], // purple-500
+  };
+  
+  data.costTypes.forEach((ct, i) => {
+    const y = chartY + 16 + i * 12;
+    
+    // Dot
+    const color = costTypeColors[ct.label] || [100, 116, 139];
+    doc.setFillColor(color[0], color[1], color[2]);
+    doc.circle(costTypeX + 6, y, 2, 'F');
+    
+    // Label
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+    doc.text(ct.label, costTypeX + 12, y + 1);
+    
+    // Value
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(ct.value), costTypeX + chartColWidth - 6, y + 1, { align: 'right' });
+    
+    // Progress bar
+    const barY = y + 4;
+    const totalCost = data.summary.totalCost || 1;
+    const barWidthPct = (ct.value / totalCost) * (chartColWidth - 16);
+    doc.setFillColor(226, 232, 240);
+    doc.roundedRect(costTypeX + 4, barY, chartColWidth - 12, 2, 1, 1, 'F');
+    doc.setFillColor(color[0], color[1], color[2]);
+    doc.roundedRect(costTypeX + 4, barY, Math.max(barWidthPct, 2), 2, 1, 1, 'F');
+  });
+  
+  // ========== EVENTS TABLE ==========
+  const tableY = chartY + chartHeight + 10;
+  doc.setFontSize(10);
   doc.setTextColor(30, 41, 59);
-  doc.text('Events', 14, 72);
+  doc.text('Events', 14, tableY);
   
   autoTable(doc, {
-    startY: 76,
+    startY: tableY + 4,
     head: [['Event', 'Datum', 'Veranstalter', 'TN', 'Gesamt', '€/TN']],
     body: data.events.map((e) => [
       e.title.length > 30 ? e.title.substring(0, 30) + '…' : e.title,

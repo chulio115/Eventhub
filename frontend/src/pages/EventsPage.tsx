@@ -119,10 +119,12 @@ function openOutlookWeb(event: EventRow) {
   const startDate = event.start_date ? new Date(event.start_date).toISOString() : '';
   const endDate = event.end_date ? new Date(event.end_date).toISOString() : startDate;
   const location = [event.location, event.city].filter(Boolean).join(', ');
+  const eventHubLink = `${getAppUrl()}/events?id=${event.id}`;
   const body = [
     `Veranstalter: ${event.organizer || 'N/A'}`,
     event.event_url ? `Website: ${event.event_url}` : '',
-    event.notes ? `Notizen: ${event.notes}` : '',
+    `\nIm EventHub öffnen: ${eventHubLink}`,
+    event.notes ? `\nNotizen: ${event.notes}` : '',
   ].filter(Boolean).join('\n');
 
   const params = new URLSearchParams({
@@ -269,9 +271,10 @@ export function EventsPage() {
     const idFromUrl = searchParams.get('id');
     if (idFromUrl && events.length > 0) {
       const eventExists = events.some((e) => e.id === idFromUrl);
-      if (eventExists && selectedId !== idFromUrl) {
+      if (eventExists) {
         setSelectedIdState(idFromUrl);
-      } else if (!eventExists) {
+        // URL-Parameter beibehalten, damit der Link funktioniert
+      } else {
         // Event existiert nicht mehr - URL bereinigen
         setSearchParams({}, { replace: true });
         setSelectedIdState(null);
@@ -322,6 +325,11 @@ export function EventsPage() {
   const [draftRatingMarketing, setDraftRatingMarketing] = useState<number | null>(null);
   const [draftRatingClevel, setDraftRatingClevel] = useState<number | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  
+  // Ansprechpartner
+  const [draftContactName, setDraftContactName] = useState('');
+  const [draftContactEmail, setDraftContactEmail] = useState('');
+  const [draftContactPhone, setDraftContactPhone] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const rightColRef = useRef<HTMLDivElement | null>(null);
@@ -542,6 +550,9 @@ export function EventsPage() {
       setDraftRatingKam(null);
       setDraftRatingMarketing(null);
       setDraftRatingClevel(null);
+      setDraftContactName('');
+      setDraftContactEmail('');
+      setDraftContactPhone('');
       return;
     }
 
@@ -568,6 +579,9 @@ export function EventsPage() {
     setDraftRatingKam(selectedEvent.rating_kam);
     setDraftRatingMarketing(selectedEvent.rating_marketing);
     setDraftRatingClevel(selectedEvent.rating_clevel);
+    setDraftContactName(selectedEvent.contact_name ?? '');
+    setDraftContactEmail(selectedEvent.contact_email ?? '');
+    setDraftContactPhone(selectedEvent.contact_phone ?? '');
   }, [selectedEvent?.id]);
 
   async function handleCreate(e: FormEvent) {
@@ -769,6 +783,9 @@ export function EventsPage() {
         rating_kam: draftRatingKam,
         rating_marketing: draftRatingMarketing,
         rating_clevel: draftRatingClevel,
+        contact_name: draftContactName.trim() || null,
+        contact_email: draftContactEmail.trim() || null,
+        contact_phone: draftContactPhone.trim() || null,
       });
 
       historyActions.forEach((action) => {
@@ -1058,7 +1075,7 @@ export function EventsPage() {
                     <div className="flex-1">
                       <div
                         className={`font-medium ${
-                          isSelected ? 'text-white' : 'text-slate-900 dark:text-slate-50'
+                          isSelected ? 'text-white' : 'text-slate-900'
                         }`}
                       >
                         {event.title}
@@ -1280,6 +1297,57 @@ export function EventsPage() {
                         onChange={(e) => setDraftOrganizer(e.target.value)}
                       />
                     </div>
+                    {/* Ansprechpartner */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <label className="mb-2 block text-xs font-semibold text-slate-600">Ansprechpartner</label>
+                      <div className="space-y-2">
+                        <Input
+                          value={draftContactName}
+                          onChange={(e) => setDraftContactName(e.target.value)}
+                          placeholder="Name"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="email"
+                            value={draftContactEmail}
+                            onChange={(e) => setDraftContactEmail(e.target.value)}
+                            placeholder="E-Mail"
+                            className="flex-1"
+                          />
+                          {draftContactEmail && (
+                            <a
+                              href={`mailto:${draftContactEmail}`}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                              title="E-Mail senden"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="tel"
+                            value={draftContactPhone}
+                            onChange={(e) => setDraftContactPhone(e.target.value)}
+                            placeholder="Telefon"
+                            className="flex-1"
+                          />
+                          {draftContactPhone && (
+                            <a
+                              href={`tel:${draftContactPhone}`}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                              title="Anrufen"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-700">
                         Tags (z. B. Verband, Kongress)
@@ -1413,17 +1481,8 @@ export function EventsPage() {
                           </a>
                         )}
                       </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">
-                        Anlagen / Links (eine pro Zeile)
-                      </label>
-                      <textarea
-                        className="h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                        value={draftAttachments}
-                        onChange={(e) => setDraftAttachments(e.target.value)}
-                      />
-                      <div className="mt-2 flex items-center gap-2">
+
+                      <div className="mt-3 flex items-center gap-2">
                         <Button
                           type="button"
                           variant="secondary"
@@ -1434,9 +1493,10 @@ export function EventsPage() {
                           {uploadFile.isPending ? 'Lade hoch…' : 'PDF hochladen'}
                         </Button>
                         <span className="text-[11px] text-slate-500">
-                          Wird als Link im Feld oben gespeichert.
+                          Hochgeladene PDFs werden beim Event gespeichert.
                         </span>
                       </div>
+
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -1444,6 +1504,7 @@ export function EventsPage() {
                         className="hidden"
                         onChange={handleFileInputChange}
                       />
+
                       {attachmentLinkLines.length > 0 && (
                         <div className="mt-3 space-y-1.5">
                           <div className="text-[11px] font-medium text-slate-500">

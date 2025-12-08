@@ -29,6 +29,9 @@ export interface EventRow {
   rating_kam: number | null;
   rating_marketing: number | null;
   rating_clevel: number | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 }
 
 export function useEvents() {
@@ -63,6 +66,9 @@ export function useEvents() {
             'rating_kam',
             'rating_marketing',
             'rating_clevel',
+            'contact_name',
+            'contact_email',
+            'contact_phone',
           ].join(', '),
         )
         .order('start_date', { ascending: true });
