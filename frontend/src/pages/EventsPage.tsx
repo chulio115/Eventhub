@@ -517,6 +517,9 @@ export function EventsPage() {
         draftRatingKam !== selectedEvent.rating_kam ||
         draftRatingMarketing !== selectedEvent.rating_marketing ||
         draftRatingClevel !== selectedEvent.rating_clevel ||
+        draftContactName.trim() !== (selectedEvent.contact_name ?? '') ||
+        draftContactEmail.trim() !== (selectedEvent.contact_email ?? '') ||
+        draftContactPhone.trim() !== (selectedEvent.contact_phone ?? '') ||
         JSON.stringify(normalizedDraftColleagues) !==
           JSON.stringify(selectedEvent.colleagues || []) ||
         JSON.stringify(normalizedDraftTags) !== JSON.stringify(selectedEvent.tags || []) ||
