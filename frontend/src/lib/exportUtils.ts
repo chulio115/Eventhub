@@ -171,7 +171,7 @@ export function downloadCostReportPDF(data: CostReportData): void {
   
   // ========== CHARTS ROW ==========
   const chartY = boxY + boxHeight + 10;
-  const chartHeight = 45;
+  const chartHeight = 50;
   const chartColWidth = (pageWidth - 28 - 10) / 3;
   
   // --- Bar Chart: Kosten nach Monat (letzte 6) ---
@@ -179,16 +179,16 @@ export function downloadCostReportPDF(data: CostReportData): void {
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(14, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
   
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  doc.text('KOSTEN NACH MONAT (LETZTE 6)', 18, chartY + 8);
+  doc.text('KOSTEN NACH MONAT', 18, chartY + 8);
   
   const monthData = data.byMonth.slice(-6);
   const maxMonthValue = Math.max(...monthData.map(m => m.sum), 1);
   const barStartY = chartY + 14;
-  const barHeight = 4;
-  const barGap = 1;
-  const maxBarWidth = chartColWidth - 40;
+  const barHeight = 5;
+  const barGap = 1.5;
+  const maxBarWidth = chartColWidth - 42;
   
   monthData.forEach((m, i) => {
     const y = barStartY + i * (barHeight + barGap);
@@ -197,103 +197,95 @@ export function downloadCostReportPDF(data: CostReportData): void {
     // Month label
     doc.setFontSize(6);
     doc.setTextColor(100, 116, 139);
-    doc.text(m.month.substring(0, 3), 18, y + 3);
+    doc.text(m.month.substring(0, 3), 18, y + 3.5);
     
-    // Bar
+    // Bar background
+    doc.setFillColor(226, 232, 240);
+    doc.roundedRect(32, y, maxBarWidth, barHeight, 1, 1, 'F');
+    
+    // Bar value
     doc.setFillColor(52, 134, 239); // brand blue
     doc.roundedRect(32, y, Math.max(barWidth, 2), barHeight, 1, 1, 'F');
     
-    // Value
+    // Value text
     doc.setFontSize(5);
     doc.setTextColor(71, 85, 105);
     const valueText = m.sum >= 1000 ? `${(m.sum / 1000).toFixed(1)}k €` : `${m.sum.toFixed(0)} €`;
-    doc.text(valueText, 32 + maxBarWidth + 2, y + 3);
+    doc.text(valueText, 32 + maxBarWidth + 2, y + 3.5);
   });
   
-  // --- Pie Chart: Top 5 Veranstalter ---
-  const pieX = 14 + chartColWidth + 5;
+  // --- Top 5 Veranstalter (als horizontale Balken) ---
+  const orgX = 14 + chartColWidth + 5;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(pieX, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
+  doc.roundedRect(orgX, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
   
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  doc.text('TOP 5 VERANSTALTER', pieX + 4, chartY + 8);
+  doc.text('TOP 5 VERANSTALTER', orgX + 4, chartY + 8);
   
-  // Simple pie chart representation (as colored dots with legend)
-  const pieColors = [[52, 134, 239], [34, 197, 94], [249, 115, 22], [168, 85, 247], [236, 72, 153]];
+  const pieColors: [number, number, number][] = [[52, 134, 239], [34, 197, 94], [249, 115, 22], [168, 85, 247], [236, 72, 153]];
   const top5Organizers = data.byOrganizer.slice(0, 5);
-  const pieCenterX = pieX + 25;
-  const pieCenterY = chartY + 28;
-  const pieRadius = 12;
-  
-  // Draw pie segments (simplified as a donut)
-  let startAngle = -Math.PI / 2;
-  const totalOrgSum = top5Organizers.reduce((sum, o) => sum + o.sum, 0);
+  const maxOrgValue = Math.max(...top5Organizers.map(o => o.sum), 1);
+  const orgBarMaxWidth = chartColWidth - 12;
   
   top5Organizers.forEach((org, i) => {
-    const angle = (org.sum / totalOrgSum) * 2 * Math.PI;
-    const endAngle = startAngle + angle;
+    const y = chartY + 14 + i * 7;
+    const barWidth = (org.sum / maxOrgValue) * (orgBarMaxWidth - 30);
     
-    // Draw arc segment
+    // Color dot
     doc.setFillColor(pieColors[i][0], pieColors[i][1], pieColors[i][2]);
+    doc.circle(orgX + 6, y + 1, 1.5, 'F');
     
-    // Simplified: draw colored circle segments
-    const midAngle = startAngle + angle / 2;
-    const dotX = pieCenterX + Math.cos(midAngle) * (pieRadius - 3);
-    const dotY = pieCenterY + Math.sin(midAngle) * (pieRadius - 3);
-    doc.circle(dotX, dotY, 3, 'F');
-    
-    startAngle = endAngle;
-  });
-  
-  // Center hole (donut effect)
-  doc.setFillColor(248, 250, 252);
-  doc.circle(pieCenterX, pieCenterY, pieRadius - 6, 'F');
-  
-  // Legend
-  const legendX = pieX + 50;
-  top5Organizers.forEach((org, i) => {
-    const y = chartY + 14 + i * 6;
-    doc.setFillColor(pieColors[i][0], pieColors[i][1], pieColors[i][2]);
-    doc.circle(legendX, y, 1.5, 'F');
+    // Label (truncated)
     doc.setFontSize(5);
     doc.setTextColor(71, 85, 105);
-    const label = org.organizer.length > 12 ? org.organizer.substring(0, 12) + '…' : org.organizer;
-    doc.text(`${label} ${org.percentage}%`, legendX + 4, y + 1);
+    const label = org.organizer.length > 10 ? org.organizer.substring(0, 10) + '…' : org.organizer;
+    doc.text(label, orgX + 10, y + 2);
+    
+    // Mini bar
+    doc.setFillColor(226, 232, 240);
+    doc.roundedRect(orgX + 35, y, orgBarMaxWidth - 50, 3, 0.5, 0.5, 'F');
+    doc.setFillColor(pieColors[i][0], pieColors[i][1], pieColors[i][2]);
+    doc.roundedRect(orgX + 35, y, Math.max(barWidth * 0.6, 2), 3, 0.5, 0.5, 'F');
+    
+    // Percentage
+    doc.setFontSize(5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${org.percentage}%`, orgX + chartColWidth - 8, y + 2, { align: 'right' });
   });
   
-  // --- Cost Types Bar ---
-  const costTypeX = pieX + chartColWidth + 5;
+  // --- Cost Types ---
+  const costTypeX = orgX + chartColWidth + 5;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(costTypeX, chartY, chartColWidth, chartHeight, 2, 2, 'FD');
   
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
   doc.text('KOSTENARTEN', costTypeX + 4, chartY + 8);
   
-  const costTypeColors: Record<string, number[]> = {
+  const costTypeColors: Record<string, [number, number, number]> = {
     'Teilnehmerkosten': [14, 165, 233], // sky-500
     'Messestandkosten': [34, 197, 94], // green-500
     'Sponsoring': [168, 85, 247], // purple-500
   };
   
   data.costTypes.forEach((ct, i) => {
-    const y = chartY + 16 + i * 12;
+    const y = chartY + 16 + i * 13;
     
-    // Dot
+    // Color dot
     const color = costTypeColors[ct.label] || [100, 116, 139];
     doc.setFillColor(color[0], color[1], color[2]);
     doc.circle(costTypeX + 6, y, 2, 'F');
     
     // Label
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setTextColor(71, 85, 105);
     doc.text(ct.label, costTypeX + 12, y + 1);
     
     // Value
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
     doc.text(formatCurrency(ct.value), costTypeX + chartColWidth - 6, y + 1, { align: 'right' });
     
@@ -302,9 +294,9 @@ export function downloadCostReportPDF(data: CostReportData): void {
     const totalCost = data.summary.totalCost || 1;
     const barWidthPct = (ct.value / totalCost) * (chartColWidth - 16);
     doc.setFillColor(226, 232, 240);
-    doc.roundedRect(costTypeX + 4, barY, chartColWidth - 12, 2, 1, 1, 'F');
+    doc.roundedRect(costTypeX + 4, barY, chartColWidth - 12, 3, 1, 1, 'F');
     doc.setFillColor(color[0], color[1], color[2]);
-    doc.roundedRect(costTypeX + 4, barY, Math.max(barWidthPct, 2), 2, 1, 1, 'F');
+    doc.roundedRect(costTypeX + 4, barY, Math.max(barWidthPct, 2), 3, 1, 1, 'F');
   });
   
   // ========== EVENTS TABLE ==========

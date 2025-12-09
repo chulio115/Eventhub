@@ -21,7 +21,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'login' | 'reset'>('login');
+  const [mode, setMode] = useState<'login' | 'magic' | 'reset'>('login');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +50,34 @@ export function LoginPage() {
     navigate(from, { replace: true });
   }
 
+  async function handleMagicLink(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    if (!email.endsWith('@immomio.de')) {
+      setError('Bitte gib eine gültige @immomio.de E-Mail-Adresse ein');
+      setLoading(false);
+      return;
+    }
+
+    const { error: magicError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${getAppUrl()}/events`,
+      },
+    });
+
+    if (magicError) {
+      setError(magicError.message);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    setMagicLinkSent(true);
+  }
+
   async function handleResetPassword(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -72,6 +101,78 @@ export function LoginPage() {
 
     setLoading(false);
     setResetSent(true);
+  }
+
+  // Magic Link erfolgreich gesendet
+  if (mode === 'magic' && magicLinkSent) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-violet-100">
+            <svg className="h-6 w-6 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h1 className="mb-2 text-xl font-semibold text-slate-900">Magic Link gesendet!</h1>
+          <p className="mb-6 text-sm text-slate-500">
+            Wir haben dir einen Login-Link an <span className="font-medium">{email}</span> gesendet. Klicke auf den Link in der E-Mail, um dich anzumelden.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('login');
+              setMagicLinkSent(false);
+            }}
+            className="text-sm font-medium text-violet-600 hover:text-violet-700"
+          >
+            ← Zurück zum Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Magic Link anfordern
+  if (mode === 'magic') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm">
+          <h1 className="mb-2 text-xl font-semibold text-slate-900">Login per E-Mail-Link</h1>
+          <p className="mb-6 text-sm text-slate-500">
+            Kein Passwort nötig – wir senden dir einen Link zum direkten Einloggen.
+          </p>
+          <form className="space-y-4" onSubmit={handleMagicLink}>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="magic-email">
+                E-Mail
+              </label>
+              <Input
+                id="magic-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="du@immomio.de"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Sende…' : 'Magic Link senden'}
+            </Button>
+          </form>
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className="text-sm font-medium text-violet-600 hover:text-violet-700"
+            >
+              ← Mit Passwort anmelden
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Passwort-Reset erfolgreich gesendet
@@ -197,6 +298,25 @@ export function LoginPage() {
             {loading ? 'Anmelden…' : 'Anmelden'}
           </Button>
         </form>
+
+        {/* Divider */}
+        <div className="mt-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-slate-200" />
+          <span className="text-xs text-slate-400">oder</span>
+          <div className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        {/* Magic Link Option */}
+        <button
+          type="button"
+          onClick={() => setMode('magic')}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          <svg className="h-4 w-4 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          Login per E-Mail-Link (ohne Passwort)
+        </button>
       </div>
     </div>
   );

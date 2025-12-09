@@ -1282,24 +1282,121 @@ export function EventsPage() {
             <div>
               {selectedEvent ? (
                 <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">Titel</label>
-                      <Input
-                        value={draftTitle}
-                        onChange={(e) => setDraftTitle(e.target.value)}
-                      />
+                  {/* LINKE SPALTE */}
+                  <div className="space-y-4">
+                    {/* Event-Details */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Event-Details</label>
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Titel</label>
+                          <Input
+                            value={draftTitle}
+                            onChange={(e) => setDraftTitle(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Veranstalter</label>
+                          <Input
+                            value={draftOrganizer}
+                            onChange={(e) => setDraftOrganizer(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Tags</label>
+                          <Input
+                            value={draftTags}
+                            onChange={(e) => setDraftTags(e.target.value)}
+                            placeholder="z. B. Verband, Kongress"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">Veranstalter</label>
-                      <Input
-                        value={draftOrganizer}
-                        onChange={(e) => setDraftOrganizer(e.target.value)}
-                      />
+
+                    {/* Datum & Ort */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Datum & Ort</label>
+                      <div className="space-y-2.5">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="mb-1 block text-[11px] text-slate-500">Startdatum</label>
+                            <Input
+                              type="date"
+                              value={draftStartDate}
+                              onChange={(e) => setDraftStartDate(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[11px] text-slate-500">Enddatum</label>
+                            <Input
+                              type="date"
+                              value={draftEndDate}
+                              onChange={(e) => setDraftEndDate(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="mb-1 block text-[11px] text-slate-500">Stadt</label>
+                            <Input
+                              value={draftCity}
+                              onChange={(e) => setDraftCity(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[11px] text-slate-500">Location</label>
+                            <Input
+                              value={draftLocation}
+                              onChange={(e) => setDraftLocation(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Teilnehmer */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Teilnehmer & Social</label>
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Kolleg:innen (Komma-getrennt)</label>
+                          <Input
+                            value={draftColleagues}
+                            onChange={(e) => setDraftColleagues(e.target.value)}
+                            placeholder="z. B. Yannik, Daniel"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">LinkedIn-Post</label>
+                          <Input
+                            value={draftLinkedinNote}
+                            onChange={(e) => setDraftLinkedinNote(e.target.value)}
+                            placeholder="z. B. 10.03. | Recap-Post"
+                          />
+                        </div>
+                        <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2.5">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                            checked={draftPublicationStatus}
+                            onChange={(e) => setDraftPublicationStatus(e.target.checked)}
+                          />
+                          <div className="leading-snug">
+                            <div className="text-xs font-medium text-slate-700">Website: Teilnahme veröffentlicht</div>
+                            <div className="text-[11px] text-slate-500">
+                              Häkchen, wenn die Teilnahme auf der Website steht.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RECHTE SPALTE */}
+                  <div className="space-y-4">
                     {/* Ansprechpartner */}
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <label className="mb-2 block text-xs font-semibold text-slate-600">Ansprechpartner</label>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Ansprechpartner</label>
                       <div className="space-y-2">
                         <Input
                           value={draftContactName}
@@ -1348,203 +1445,125 @@ export function EventsPage() {
                         </div>
                       </div>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">
-                        Tags (z. B. Verband, Kongress)
-                      </label>
-                      <Input
-                        value={draftTags}
-                        onChange={(e) => setDraftTags(e.target.value)}
-                        placeholder="Verband, Kongress"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Startdatum
-                        </label>
-                        <Input
-                          type="date"
-                          value={draftStartDate}
-                          onChange={(e) => setDraftStartDate(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Enddatum
-                        </label>
-                        <Input
-                          type="date"
-                          value={draftEndDate}
-                          onChange={(e) => setDraftEndDate(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">Stadt</label>
-                        <Input
-                          value={draftCity}
-                          onChange={(e) => setDraftCity(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">Location</label>
-                        <Input
-                          value={draftLocation}
-                          onChange={(e) => setDraftLocation(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">
-                        Kolleg:innen (Komma-getrennt)
-                      </label>
-                      <Input
-                        value={draftColleagues}
-                        onChange={(e) => setDraftColleagues(e.target.value)}
-                        placeholder="z. B. Yannik, Daniel"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">
-                        LinkedIn-Post (geplant: Datum / Hinweis)
-                      </label>
-                      <Input
-                        value={draftLinkedinNote}
-                        onChange={(e) => setDraftLinkedinNote(e.target.value)}
-                        placeholder="z. B. 10.03. | Recap-Post"
-                      />
-                    </div>
-                    <div className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-                        checked={draftPublicationStatus}
-                        onChange={(e) => setDraftPublicationStatus(e.target.checked)}
-                      />
-                      <div className="leading-snug">
-                        <div className="text-xs font-medium text-slate-700">Website: Teilnahme veröffentlicht</div>
-                        <div className="text-[11px] text-slate-500">
-                          Häkchen, wenn die Teilnahme auf der Website steht.
+
+                    {/* Kosten */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Kosten</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Kosten / Ticket pro Person</label>
+                          <Input
+                            value={draftCostValue}
+                            onChange={(e) => setDraftCostValue(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Kostenart</label>
+                          <select
+                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm"
+                            value={draftCostType}
+                            onChange={(e) =>
+                              setDraftCostType(e.target.value as EventRow['cost_type'])
+                            }
+                          >
+                            <option value="participant">Teilnehmerkosten</option>
+                            <option value="booth">Standkosten</option>
+                            <option value="sponsoring">Sponsoring</option>
+                          </select>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Kosten / Ticket pro Person
-                        </label>
-                        <Input
-                          value={draftCostValue}
-                          onChange={(e) => setDraftCostValue(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Kostenart
-                        </label>
-                        <select
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm"
-                          value={draftCostType}
-                          onChange={(e) =>
-                            setDraftCostType(e.target.value as EventRow['cost_type'])
-                          }
-                        >
-                          <option value="participant">Teilnehmerkosten</option>
-                          <option value="booth">Standkosten</option>
-                          <option value="sponsoring">Sponsoring</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-700">
-                        Event-Website (URL)
-                      </label>
-                      <div className="flex gap-2">
-                        <Input
-                          className="flex-1"
-                          value={draftEventUrl}
-                          onChange={(e) => setDraftEventUrl(e.target.value)}
-                        />
-                        {draftEventUrl.trim() && (
-                          <a
-                            href={ensureHttpUrl(draftEventUrl)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-9 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                          >
-                            Öffnen
-                          </a>
-                        )}
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-8 px-3 text-xs"
-                          onClick={handleFileButtonClick}
-                          disabled={!selectedEvent || uploadFile.isPending}
-                        >
-                          {uploadFile.isPending ? 'Lade hoch…' : 'PDF hochladen'}
-                        </Button>
-                        <span className="text-[11px] text-slate-500">
-                          Hochgeladene PDFs werden beim Event gespeichert.
-                        </span>
-                      </div>
-
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="application/pdf"
-                        className="hidden"
-                        onChange={handleFileInputChange}
-                      />
-
-                      {attachmentLinkLines.length > 0 && (
-                        <div className="mt-3 space-y-1.5">
-                          <div className="text-[11px] font-medium text-slate-500">
-                            Hochgeladene Dokumente ({attachmentLinkLines.length}):
-                          </div>
-                          {attachmentLinkLines.map((link) => {
-                            const fileName = extractFileName(link);
-                            const isPdf = fileName.toLowerCase().endsWith('.pdf');
-                            return (
+                    {/* Website & Dokumente */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Website & Dokumente</label>
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="mb-1 block text-[11px] text-slate-500">Event-Website (URL)</label>
+                          <div className="flex gap-2">
+                            <Input
+                              className="flex-1"
+                              value={draftEventUrl}
+                              onChange={(e) => setDraftEventUrl(e.target.value)}
+                              placeholder="https://..."
+                            />
+                            {draftEventUrl.trim() && (
                               <a
-                                key={link}
-                                href={ensureHttpUrl(link)}
+                                href={ensureHttpUrl(draftEventUrl)}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 transition-colors hover:border-brand/30 hover:bg-brand/5 hover:text-brand"
+                                className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                               >
-                                {isPdf ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <path d="M9 15h6" />
-                                    <path d="M9 11h6" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                                  </svg>
-                                )}
-                                <span className="flex-1 truncate font-medium">{fileName}</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                  <polyline points="15 3 21 3 21 9" />
-                                  <line x1="10" y1="14" x2="21" y2="3" />
-                                </svg>
+                                Öffnen
                               </a>
-                            );
-                          })}
+                            )}
+                          </div>
                         </div>
-                      )}
+
+                        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2.5">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-8 px-3 text-xs"
+                            onClick={handleFileButtonClick}
+                            disabled={!selectedEvent || uploadFile.isPending}
+                          >
+                            {uploadFile.isPending ? 'Lade hoch…' : 'PDF hochladen'}
+                          </Button>
+                          <span className="text-[11px] text-slate-500">
+                            PDFs werden beim Event gespeichert.
+                          </span>
+                        </div>
+
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          onChange={handleFileInputChange}
+                        />
+
+                        {attachmentLinkLines.length > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="text-[11px] font-medium text-slate-500">
+                              Dokumente ({attachmentLinkLines.length}):
+                            </div>
+                            {attachmentLinkLines.map((link) => {
+                              const fileName = extractFileName(link);
+                              const isPdf = fileName.toLowerCase().endsWith('.pdf');
+                              return (
+                                <a
+                                  key={link}
+                                  href={ensureHttpUrl(link)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 transition-colors hover:border-brand/30 hover:bg-brand/5 hover:text-brand"
+                                >
+                                  {isPdf ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                      <polyline points="14 2 14 8 20 8" />
+                                      <path d="M9 15h6" />
+                                      <path d="M9 11h6" />
+                                    </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                    </svg>
+                                  )}
+                                  <span className="flex-1 truncate font-medium">{fileName}</span>
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                  </svg>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
