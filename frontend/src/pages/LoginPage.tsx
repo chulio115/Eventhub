@@ -27,8 +27,15 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from =
-    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/events';
+  // Ursprüngliches Ziel inkl. Query (?id=...) und Hash wiederherstellen
+  const locationState = location.state as
+    | { from?: { pathname?: string; search?: string; hash?: string } }
+    | null;
+
+  const fromPath =
+    (locationState?.from?.pathname || '/events') +
+    (locationState?.from?.search || '') +
+    (locationState?.from?.hash || '');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -47,7 +54,7 @@ export function LoginPage() {
     }
 
     setLoading(false);
-    navigate(from, { replace: true });
+    navigate(fromPath, { replace: true });
   }
 
   async function handleMagicLink(e: FormEvent) {
@@ -64,7 +71,8 @@ export function LoginPage() {
     const { error: magicError } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${getAppUrl()}/events`,
+        // Nach Klick auf den Magic Link wieder auf das ursprünglich angeforderte Ziel leiten
+        emailRedirectTo: `${getAppUrl()}${fromPath}`,
       },
     });
 
@@ -90,7 +98,8 @@ export function LoginPage() {
     }
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getAppUrl()}/events`,
+      // Nach Passwort-Reset ebenfalls wieder das ursprüngliche Ziel aufrufen
+      redirectTo: `${getAppUrl()}${fromPath}`,
     });
 
     if (resetError) {
