@@ -674,87 +674,127 @@ export function EventsPage() {
     const linkedinPlanned = Boolean(linkedinNoteTrimmed);
 
     // Automatische Historie-Einträge für alle inhaltlichen Änderungen
-    const changedFields: string[] = [];
+    let changedEventDetails = false;
+    let changedContact = false;
+    let changedDateLocation = false;
+    let changedParticipantsSocial = false;
+    let changedCosts = false;
+    let changedWebsiteDocs = false;
+    let changedNotes = false;
+    let changedRatings = false;
 
-    if (draftTitle.trim() !== (selectedEvent.title ?? '')) {
-      changedFields.push('Titel');
+    const prevColleagues = selectedEvent.colleagues || [];
+    const prevTags = selectedEvent.tags || [];
+    const prevAttachments = selectedEvent.attachments || [];
+
+    // Event-Details: Titel, Veranstalter, Tags
+    if (
+      draftTitle.trim() !== (selectedEvent.title ?? '') ||
+      draftOrganizer.trim() !== (selectedEvent.organizer ?? '') ||
+      JSON.stringify(tagsArray) !== JSON.stringify(prevTags)
+    ) {
+      changedEventDetails = true;
     }
 
-    if (draftOrganizer.trim() !== (selectedEvent.organizer ?? '')) {
-      changedFields.push('Veranstalter');
+    // Ansprechpartner: Name, E-Mail, Telefon
+    if (
+      draftContactName.trim() !== (selectedEvent.contact_name ?? '') ||
+      draftContactEmail.trim() !== (selectedEvent.contact_email ?? '') ||
+      draftContactPhone.trim() !== (selectedEvent.contact_phone ?? '')
+    ) {
+      changedContact = true;
     }
 
+    // Datum & Ort: Start/Enddatum, Stadt, Location
     if (
       draftCity.trim() !== (selectedEvent.city ?? '') ||
-      draftLocation.trim() !== (selectedEvent.location ?? '')
-    ) {
-      changedFields.push('Ort/Location');
-    }
-
-    if (
+      draftLocation.trim() !== (selectedEvent.location ?? '') ||
       draftStartDate !== (selectedEvent.start_date ?? '') ||
       draftEndDate !== (selectedEvent.end_date ?? '')
     ) {
-      changedFields.push('Zeitraum');
+      changedDateLocation = true;
     }
 
+    // Teilnehmer & Social: Kolleg:innen, LinkedIn-Plan, Website-Status
+    if (
+      JSON.stringify(colleaguesArray) !== JSON.stringify(prevColleagues) ||
+      linkedinPlanned !== selectedEvent.linkedin_plan ||
+      linkedinNoteTrimmed !== (selectedEvent.linkedin_note ?? '') ||
+      draftPublicationStatus !== selectedEvent.publication_status
+    ) {
+      changedParticipantsSocial = true;
+    }
+
+    // Kosten: Typ und Wert
     if (
       draftCostType !== selectedEvent.cost_type ||
       costNumeric !== (selectedEvent.cost_value ?? 0)
     ) {
-      changedFields.push('Kosten');
+      changedCosts = true;
     }
 
-    if (draftEventUrl.trim() !== (selectedEvent.event_url ?? '')) {
-      changedFields.push('Event-URL');
+    // Website & Dokumente: Event-URL, Anhänge
+    if (
+      draftEventUrl.trim() !== (selectedEvent.event_url ?? '') ||
+      JSON.stringify(attachmentsArray) !== JSON.stringify(prevAttachments)
+    ) {
+      changedWebsiteDocs = true;
     }
 
-    if (draftNotes.trim() !== (selectedEvent.notes ?? '')) {
-      changedFields.push('Notizen');
+    // Notizen & Besucher-Notizen
+    if (
+      draftNotes.trim() !== (selectedEvent.notes ?? '') ||
+      draftVisitorNotes.trim() !== (selectedEvent.visitor_notes ?? '')
+    ) {
+      changedNotes = true;
     }
 
-    if (draftVisitorNotes.trim() !== (selectedEvent.visitor_notes ?? '')) {
-      changedFields.push('Besucher-Notizen');
-    }
-
+    // Bewertungen (Sales, KAM, Marketing, C-Level)
     if (
       draftRatingSales !== selectedEvent.rating_sales ||
       draftRatingKam !== selectedEvent.rating_kam ||
       draftRatingMarketing !== selectedEvent.rating_marketing ||
       draftRatingClevel !== selectedEvent.rating_clevel
     ) {
-      changedFields.push('Bewertungen');
+      changedRatings = true;
     }
 
-    if (
-      linkedinPlanned !== selectedEvent.linkedin_plan ||
-      linkedinNoteTrimmed !== (selectedEvent.linkedin_note ?? '')
-    ) {
-      changedFields.push('LinkedIn-Planung');
+    const changedBlocks: string[] = [];
+
+    if (changedEventDetails) {
+      changedBlocks.push('Event-Details');
     }
 
-    if (draftPublicationStatus !== selectedEvent.publication_status) {
-      changedFields.push('Website-Status');
+    if (changedContact) {
+      changedBlocks.push('Ansprechpartner');
     }
 
-    const prevColleagues = selectedEvent.colleagues || [];
-    const prevTags = selectedEvent.tags || [];
-    const prevAttachments = selectedEvent.attachments || [];
-
-    if (JSON.stringify(colleaguesArray) !== JSON.stringify(prevColleagues)) {
-      changedFields.push('Kolleg:innen');
+    if (changedDateLocation) {
+      changedBlocks.push('Datum & Ort');
     }
 
-    if (JSON.stringify(tagsArray) !== JSON.stringify(prevTags)) {
-      changedFields.push('Tags');
+    if (changedParticipantsSocial) {
+      changedBlocks.push('Teilnehmer & Social');
     }
 
-    if (JSON.stringify(attachmentsArray) !== JSON.stringify(prevAttachments)) {
-      changedFields.push('Anhänge');
+    if (changedCosts) {
+      changedBlocks.push('Kosten');
     }
 
-    if (changedFields.length > 0) {
-      historyActions.push(`Eventdaten geändert (${changedFields.join(', ')})`);
+    if (changedWebsiteDocs) {
+      changedBlocks.push('Website & Dokumente');
+    }
+
+    if (changedNotes) {
+      changedBlocks.push('Notizen');
+    }
+
+    if (changedRatings) {
+      changedBlocks.push('Bewertungen');
+    }
+
+    if (changedBlocks.length > 0) {
+      historyActions.push(`Eventdaten geändert (${changedBlocks.join(', ')})`);
     }
 
     try {
