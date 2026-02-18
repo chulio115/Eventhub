@@ -20,6 +20,16 @@ function formatCompactEuro(value: number): string {
   return formatEuro(value);
 }
 
+function formatDateRange(startDate: string | null, endDate: string | null): string {
+  if (!startDate) return '';
+  const start = new Date(startDate);
+  const startStr = start.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (!endDate || endDate === startDate) return startStr;
+  const end = new Date(endDate);
+  const endStr = end.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return `${startStr} – ${endStr}`;
+}
+
 // Einfaches Balkendiagramm als SVG
 function BarChart({ data, maxValue }: { data: { label: string; value: number }[]; maxValue: number }) {
   const barHeight = 24;
@@ -339,6 +349,10 @@ export function CostsPage() {
       costTypeFilter.length > 0
         ? costTypeFilter.map((t) => t === 'participant' ? 'Teilnehmerkosten' : t === 'booth' ? 'Standkosten' : 'Sponsoring').join(', ')
         : 'Alle Kostenarten',
+      statusFilter.length > 0
+        ? `Status: ${statusFilter.map((s) => s === 'booked' ? 'Gebucht' : s === 'planned' ? 'Geplant' : s === 'consider' ? 'Bewertung' : 'Abgesagt').join(', ')}`
+        : 'Alle Status',
+      colleagueFilter.length > 0 ? `Teilnehmer: ${colleagueFilter.join(', ')}` : 'Alle Teilnehmer',
     ].join(' · ');
 
     // Calculate percentages for organizers
@@ -800,7 +814,7 @@ export function CostsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   <span className="text-slate-700">
-                    {new Date(selectedEvent.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    {formatDateRange(selectedEvent.start_date, selectedEvent.end_date)}
                   </span>
                 </div>
               )}
@@ -813,12 +827,14 @@ export function CostsPage() {
                   <span className="text-slate-700">{selectedEvent.city}</span>
                 </div>
               )}
-              <div className="flex items-center gap-3 text-sm">
-                <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="text-slate-700">{selectedEvent.colleagues_count} Teilnehmer</span>
-              </div>
+              {selectedEvent.colleagues && selectedEvent.colleagues.length > 0 && (
+                <div className="flex items-start gap-3 text-sm">
+                  <svg className="mt-0.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-slate-700">{selectedEvent.colleagues.join(', ')}</span>
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Gesamtkosten</div>
@@ -899,7 +915,7 @@ export function CostsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-slate-900">{event.title}</div>
                     <div className="text-xs text-slate-500">
-                      {event.organizer} · {event.colleagues_count} TN
+                      {event.organizer} · {event.colleagues.join(', ')}
                     </div>
                   </div>
                   <span className="ml-3 font-medium text-slate-900">{formatEuro(event.total_cost)}</span>
@@ -960,7 +976,7 @@ export function CostsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-slate-900">{event.title}</div>
                     <div className="text-xs text-slate-500">
-                      {event.start_date ? new Date(event.start_date).toLocaleDateString('de-DE') : '–'} · {event.colleagues_count} TN
+                      {formatDateRange(event.start_date, event.end_date)} · {event.colleagues.join(', ')}
                     </div>
                   </div>
                   <span className="ml-3 font-medium text-slate-900">{formatEuro(event.total_cost)}</span>

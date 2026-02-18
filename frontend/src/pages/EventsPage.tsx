@@ -37,7 +37,17 @@ function generateICS(event: EventRow): string {
   };
 
   const startDate = formatICSDate(event.start_date);
-  const endDate = formatICSDate(event.end_date) || startDate;
+  // DTEND ist exklusiv, also der Tag nach dem letzten Event-Tag
+  let endDateStr = event.end_date || event.start_date;
+  let endDate;
+  if (endDateStr) {
+    const endDateObj = new Date(endDateStr + 'T00:00:00');
+    endDateObj.setDate(endDateObj.getDate() + 1);
+    endDate = endDateObj.toISOString().slice(0, 10).replace(/-/g, '');
+  } else {
+    endDate = startDate; // Fallback
+  }
+
   const location = [event.location, event.city].filter(Boolean).join(', ');
   const eventHubLink = `${getAppUrl()}/events?id=${event.id}`;
   

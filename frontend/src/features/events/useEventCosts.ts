@@ -9,6 +9,7 @@ export type EventCostRow = {
   status: 'planned' | 'attended' | 'cancelled' | 'consider';
   booked: boolean;
   start_date: string | null;
+  end_date: string | null;
   cost_type: 'participant' | 'booth' | 'sponsoring';
   cost_value: number;
   colleagues: string[];
@@ -24,7 +25,7 @@ export function useEventCosts() {
       // Lade direkt von events-Tabelle für erweiterte Felder
       const { data, error } = await supabase
         .from('events')
-        .select('id, title, organizer, city, status, booked, start_date, cost_type, cost_value, colleagues')
+        .select('id, title, organizer, city, status, booked, start_date, end_date, cost_type, cost_value, colleagues')
         .order('start_date', { ascending: true });
 
       if (error) {
