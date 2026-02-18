@@ -108,6 +108,7 @@ export interface CostReportData {
     costType: string;
     totalCost: number;
     costPerParticipant: number;
+    status: string;
   }[];
   byOrganizer: { organizer: string; sum: number; percentage: number }[];
   byMonth: { month: string; sum: number }[];
@@ -307,10 +308,11 @@ export function downloadCostReportPDF(data: CostReportData): void {
   
   autoTable(doc, {
     startY: tableY + 4,
-    head: [['Event', 'Datum', 'Veranstalter', 'TN', 'Gesamt', '€/TN']],
+    head: [['Event', 'Datum', 'Status', 'Veranstalter', 'TN', 'Gesamt', '€/TN']],
     body: data.events.map((e) => [
       e.title.length > 30 ? e.title.substring(0, 30) + '…' : e.title,
       e.date,
+      e.status,
       e.organizer.length > 15 ? e.organizer.substring(0, 15) + '…' : e.organizer,
       e.participants.toString(),
       formatCurrencyForExport(e.totalCost) + ' €',
@@ -329,10 +331,38 @@ export function downloadCostReportPDF(data: CostReportData): void {
       fillColor: [248, 250, 252], // slate-50
     },
     columnStyles: {
-      0: { cellWidth: 50 },
-      3: { halign: 'right' },
+      0: { cellWidth: 35 },
+      2: { cellWidth: 25, halign: 'center' },
+      3: { cellWidth: 30 },
       4: { halign: 'right' },
       5: { halign: 'right' },
+      6: { halign: 'right' },
+    },
+    didParseCell: function(data) {
+      if (data.section === 'body' && data.column.index === 2) {
+        const status = data.cell.raw;
+        let fillColor: [number, number, number];
+        let textColor: [number, number, number];
+        switch (status) {
+          case 'Gebucht':
+            fillColor = [209, 250, 229]; // emerald-50
+            textColor = [6, 78, 59]; // emerald-900
+            break;
+          case 'Bewertung':
+            fillColor = [254, 243, 199]; // amber-50
+            textColor = [120, 53, 15]; // amber-900
+            break;
+          case 'Abgesagt':
+            fillColor = [254, 226, 226]; // red-50
+            textColor = [127, 29, 29]; // red-900
+            break;
+          default: // Geplant
+            fillColor = [224, 242, 254]; // sky-50
+            textColor = [2, 132, 199]; // sky-700
+        }
+        data.cell.styles.fillColor = fillColor;
+        data.cell.styles.textColor = textColor;
+      }
     },
   });
   

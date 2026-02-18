@@ -30,6 +30,29 @@ function formatDateRange(startDate: string | null, endDate: string | null): stri
   return `${startStr} – ${endStr}`;
 }
 
+function mapToUiStatus(status: string, booked: boolean): string {
+  if (status === 'cancelled') return 'abgesagt';
+  if (status === 'attended') return 'gebucht';
+  if (booked) return 'gebucht';
+  if (status === 'consider') return 'bewertung';
+  return 'geplant';
+}
+
+function getUiStatusLabel(uiStatus: string): string {
+  switch (uiStatus) {
+    case 'bewertung':
+      return 'Bewertung';
+    case 'geplant':
+      return 'Geplant';
+    case 'gebucht':
+      return 'Gebucht';
+    case 'abgesagt':
+      return 'Abgesagt';
+    default:
+      return uiStatus;
+  }
+}
+
 // Einfaches Balkendiagramm als SVG
 function BarChart({ data, maxValue }: { data: { label: string; value: number }[]; maxValue: number }) {
   const barHeight = 24;
@@ -400,6 +423,7 @@ export function CostsPage() {
         costType: row.cost_type === 'participant' ? 'Teilnehmerkosten' : row.cost_type === 'booth' ? 'Standkosten' : 'Sponsoring',
         totalCost: row.total_cost ?? 0,
         costPerParticipant: row.cost_per_participant ?? 0,
+        status: getUiStatusLabel(mapToUiStatus(row.status, row.booked)),
       })),
       byOrganizer: byOrganizerWithPercentage,
       byMonth: byMonth.map((m) => ({
