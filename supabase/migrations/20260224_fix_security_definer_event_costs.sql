@@ -2,8 +2,10 @@
 -- Remove SECURITY DEFINER to prevent bypassing RLS policies
 -- Date: 2026-02-24
 
--- Recreate the event_costs view without SECURITY DEFINER
-CREATE OR REPLACE VIEW public.event_costs AS
+-- Drop and recreate the event_costs view without SECURITY DEFINER
+DROP VIEW IF EXISTS public.event_costs;
+
+CREATE VIEW public.event_costs AS
 SELECT
   e.id,
   e.title,
@@ -12,7 +14,6 @@ SELECT
   e.status,
   e.booked,
   e.start_date,
-  e.end_date,
   e.cost_type,
   e.cost_value,
   e.colleagues,
