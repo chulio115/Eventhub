@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useEvents, type EventRow } from '../features/events/useEvents';
 import { sanitizeHtml } from '../lib/richText';
+import { formatTimeRange } from '../lib/eventTime';
 
 function copyEventLink(eventId: string) {
   const url = `${window.location.origin}/events?id=${eventId}`;
@@ -357,6 +358,9 @@ export function CalendarPage() {
                 </svg>
                 <span className="text-slate-700">
                   {formatDateRange(selectedEvent.start_date, selectedEvent.end_date)}
+                  {formatTimeRange(selectedEvent.start_time, selectedEvent.end_time) && (
+                    <>, {formatTimeRange(selectedEvent.start_time, selectedEvent.end_time)}</>
+                  )}
                 </span>
               </div>
 

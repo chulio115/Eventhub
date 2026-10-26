@@ -15,6 +15,7 @@ import { useAuth } from '../features/auth/AuthContext';
 import { useUsers } from '../features/users/useUsers';
 import { RichTextEditor } from '../components/ui/RichTextEditor';
 import { htmlToPlainText, normalizeNotes } from '../lib/richText';
+import { toTimeInput, formatTimeRange } from '../lib/eventTime';
 
 function copyEventLink(eventId: string) {
   const url = `${window.location.origin}/events?id=${eventId}`;
@@ -40,6 +41,17 @@ function generateICS(event: EventRow): string {
   };
 
   const startDate = formatICSDate(event.start_date);
+  const startTime = toTimeInput(event.start_time);
+  const endTime = toTimeInput(event.end_time);
+  // Mit Uhrzeit: Termin mit Start/Ende (in UTC), sonst ganztägig
+  let timedLines: string[] | null = null;
+  if (event.start_date && startTime) {
+    const toUtc = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const start = new Date(`${event.start_date}T${startTime}:00`);
+    let end = new Date(`${event.end_date || event.start_date}T${endTime || startTime}:00`);
+    if (end.getTime() <= start.getTime()) end = new Date(start.getTime() + 60 * 60 * 1000);
+    timedLines = [`DTSTART:${toUtc(start)}`, `DTEND:${toUtc(end)}`];
+  }
   // DTEND ist exklusiv, also der Tag nach dem letzten Event-Tag
   let endDateStr = event.end_date || event.start_date;
   let endDate;
@@ -74,8 +86,7 @@ function generateICS(event: EventRow): string {
     'BEGIN:VEVENT',
     `UID:${event.id}@eventhub`,
     `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
-    `DTSTART;VALUE=DATE:${startDate}`,
-    `DTEND;VALUE=DATE:${endDate}`,
+    ...(timedLines ?? [`DTSTART;VALUE=DATE:${startDate}`, `DTEND;VALUE=DATE:${endDate}`]),
     `SUMMARY:${event.title.replace(/[,;]/g, ' ')}`,
     location ? `LOCATION:${location.replace(/[,;]/g, ' ')}` : '',
     `DESCRIPTION:${description}`,
@@ -92,6 +103,7 @@ function generateCalendarEmail(event: EventRow, recipientEmail: string): string 
   const dateStr = event.start_date 
     ? new Date(event.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
     : 'Datum folgt';
+  const timeStr = formatTimeRange(event.start_time, event.end_time);
   const locationStr = [event.location, event.city].filter(Boolean).join(', ') || 'Ort folgt';
   
   const subject = encodeURIComponent(`Kalendereinladung: ${event.title}`);
@@ -101,7 +113,7 @@ function generateCalendarEmail(event: EventRow, recipientEmail: string): string 
 du wurdest zu folgendem Event eingeladen:
 
 📅 ${event.title}
-📆 ${dateStr}
+📆 ${dateStr}${timeStr ? `, ${timeStr}` : ''}
 📍 ${locationStr}
 🏢 Veranstalter: ${event.organizer || 'N/A'}
 ${event.event_url ? `🔗 Website: ${event.event_url}` : ''}
@@ -129,8 +141,18 @@ function downloadICS(event: EventRow) {
 }
 
 function openOutlookWeb(event: EventRow) {
-  const startDate = event.start_date ? new Date(event.start_date).toISOString() : '';
-  const endDate = event.end_date ? new Date(event.end_date).toISOString() : startDate;
+  const startTime = toTimeInput(event.start_time);
+  const endTime = toTimeInput(event.end_time);
+  const timed = Boolean(event.start_date && startTime);
+  let startDate = event.start_date ? new Date(event.start_date).toISOString() : '';
+  let endDate = event.end_date ? new Date(event.end_date).toISOString() : startDate;
+  if (timed) {
+    const start = new Date(`${event.start_date}T${startTime}:00`);
+    let end = new Date(`${event.end_date || event.start_date}T${endTime || startTime}:00`);
+    if (end.getTime() <= start.getTime()) end = new Date(start.getTime() + 60 * 60 * 1000);
+    startDate = start.toISOString();
+    endDate = end.toISOString();
+  }
   const location = [event.location, event.city].filter(Boolean).join(', ');
   const eventHubLink = `${getAppUrl()}/events?id=${event.id}`;
   const body = [
@@ -144,6 +166,7 @@ function openOutlookWeb(event: EventRow) {
     subject: event.title,
     startdt: startDate,
     enddt: endDate,
+    allday: timed ? 'false' : 'true',
     location: location,
     body: body,
     path: '/calendar/action/compose',
@@ -320,6 +343,8 @@ export function EventsPage() {
   const [draftLocation, setDraftLocation] = useState('');
   const [draftStartDate, setDraftStartDate] = useState('');
   const [draftEndDate, setDraftEndDate] = useState('');
+  const [draftStartTime, setDraftStartTime] = useState('');
+  const [draftEndTime, setDraftEndTime] = useState('');
   const [draftColleagues, setDraftColleagues] = useState('');
   const [draftTags, setDraftTags] = useState('');
   const [draftCostType, setDraftCostType] = useState<EventRow['cost_type']>('participant');
@@ -491,6 +516,8 @@ export function EventsPage() {
   const selectedEvent: EventRow | undefined = events.find(
     (e) => e.id === effectiveSelectedId,
   );
+  // Uhrzeit-Felder nur anzeigen, wenn die Datenbank die Spalten start_time/end_time hat
+  const timesSupported = Boolean(selectedEvent && 'start_time' in selectedEvent);
 
   const {
     data: history = [],
@@ -547,6 +574,9 @@ export function EventsPage() {
         draftLocation.trim() !== (selectedEvent.location ?? '') ||
         draftStartDate !== (selectedEvent.start_date ?? '') ||
         draftEndDate !== (selectedEvent.end_date ?? '') ||
+        (timesSupported &&
+          (draftStartTime !== toTimeInput(selectedEvent.start_time) ||
+            draftEndTime !== toTimeInput(selectedEvent.end_time))) ||
         draftStatus !== selectedEvent.status ||
         draftBooked !== selectedEvent.booked ||
         draftCostType !== selectedEvent.cost_type ||
@@ -581,6 +611,8 @@ export function EventsPage() {
       setDraftLocation('');
       setDraftStartDate('');
       setDraftEndDate('');
+      setDraftStartTime('');
+      setDraftEndTime('');
       setDraftColleagues('');
       setDraftTags('');
       setDraftCostType('participant');
@@ -610,6 +642,8 @@ export function EventsPage() {
     setDraftLocation(selectedEvent.location ?? '');
     setDraftStartDate(selectedEvent.start_date ?? '');
     setDraftEndDate(selectedEvent.end_date ?? '');
+    setDraftStartTime(toTimeInput(selectedEvent.start_time));
+    setDraftEndTime(toTimeInput(selectedEvent.end_time));
     setDraftColleagues((selectedEvent.colleagues || []).join(', '));
     setDraftTags((selectedEvent.tags || []).join(', '));
     setDraftCostType(selectedEvent.cost_type);
@@ -757,7 +791,10 @@ export function EventsPage() {
       draftCity.trim() !== (selectedEvent.city ?? '') ||
       draftLocation.trim() !== (selectedEvent.location ?? '') ||
       draftStartDate !== (selectedEvent.start_date ?? '') ||
-      draftEndDate !== (selectedEvent.end_date ?? '')
+      draftEndDate !== (selectedEvent.end_date ?? '') ||
+      (timesSupported &&
+        (draftStartTime !== toTimeInput(selectedEvent.start_time) ||
+          draftEndTime !== toTimeInput(selectedEvent.end_time)))
     ) {
       changedDateLocation = true;
     }
@@ -853,6 +890,7 @@ export function EventsPage() {
         location: draftLocation.trim() || null,
         start_date: draftStartDate || null,
         end_date: draftEndDate || null,
+        ...(timesSupported ? { start_time: draftStartTime || null, end_time: draftEndTime || null } : {}),
         status: nextStatus,
         booked: nextBooked,
         colleagues: colleaguesArray,
@@ -911,6 +949,12 @@ export function EventsPage() {
         },
       },
     );
+  }
+
+  function handleRemoveAttachment(link: string) {
+    const remaining = normalizedDraftAttachments.filter((l) => l !== link);
+    setDraftAttachments(remaining.join('\n'));
+    toast('Dokument entfernt. Zum Übernehmen „Änderungen speichern“ klicken.');
   }
 
   function handleSaveSelectedClick() {
@@ -1462,6 +1506,26 @@ export function EventsPage() {
                             />
                           </div>
                         </div>
+                        {timesSupported && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="mb-1 block text-[11px] text-slate-500">Startzeit</label>
+                              <Input
+                                type="time"
+                                value={draftStartTime}
+                                onChange={(e) => setDraftStartTime(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] text-slate-500">Endzeit</label>
+                              <Input
+                                type="time"
+                                value={draftEndTime}
+                                onChange={(e) => setDraftEndTime(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="mb-1 block text-[11px] text-slate-500">Stadt</label>
@@ -1659,12 +1723,12 @@ export function EventsPage() {
                               const fileName = extractFileName(link);
                               const isPdf = fileName.toLowerCase().endsWith('.pdf');
                               return (
+                                <div key={link} className="flex items-center gap-1.5">
                                 <a
-                                  key={link}
                                   href={ensureHttpUrl(link)}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 transition-colors hover:border-brand/30 hover:bg-brand/5 hover:text-brand"
+                                  className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 transition-colors hover:border-brand/30 hover:bg-brand/5 hover:text-brand"
                                 >
                                   {isPdf ? (
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1686,6 +1750,18 @@ export function EventsPage() {
                                     <line x1="10" y1="14" x2="21" y2="3" />
                                   </svg>
                                 </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAttachment(link)}
+                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                                  title="Dokument entfernen"
+                                  aria-label={`Dokument ${fileName} entfernen`}
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                                </div>
                               );
                             })}
                           </div>

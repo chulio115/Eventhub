@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
 import { sanitizeHtml } from '../lib/richText';
+import { formatTimeRange, isMissingColumnError } from '../lib/eventTime';
 
 interface SharedEvent {
   id: string;
@@ -17,6 +18,8 @@ interface SharedEvent {
   cost_value: number;
   event_url: string | null;
   notes: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 export function SharePage() {
@@ -43,17 +46,20 @@ export function SharePage() {
       }
 
       // Event laden
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('id, title, organizer, start_date, end_date, city, location, status, colleagues, cost_type, cost_value, event_url, notes')
-        .eq('id', tokenData.event_id)
-        .single();
+      const baseColumns = 'id, title, organizer, start_date, end_date, city, location, status, colleagues, cost_type, cost_value, event_url, notes';
+      const loadEvent = (columns: string) =>
+        supabase.from('events').select(columns).eq('id', tokenData.event_id).single();
+      // Uhrzeiten mitladen; falls die Spalten noch fehlen, ohne sie
+      let { data: eventData, error: eventError } = await loadEvent(`${baseColumns}, start_time, end_time`);
+      if (isMissingColumnError(eventError)) {
+        ({ data: eventData, error: eventError } = await loadEvent(baseColumns));
+      }
 
       if (eventError || !eventData) {
         throw new Error('Event nicht gefunden');
       }
 
-      return eventData as SharedEvent;
+      return eventData as unknown as SharedEvent;
     },
   });
 
@@ -155,6 +161,9 @@ export function SharePage() {
                   {formatDate(data.start_date)}
                   {data.end_date && data.end_date !== data.start_date && (
                     <> – {formatDate(data.end_date)}</>
+                  )}
+                  {formatTimeRange(data.start_time, data.end_time) && (
+                    <>, {formatTimeRange(data.start_time, data.end_time)}</>
                   )}
                 </p>
               </div>
