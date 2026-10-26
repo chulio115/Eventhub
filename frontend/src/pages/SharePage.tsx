@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
+import { sanitizeHtml } from '../lib/richText';
 
 interface SharedEvent {
   id: string;
@@ -203,7 +204,10 @@ export function SharePage() {
                   </svg>
                   Notizen
                 </div>
-                <p className="whitespace-pre-wrap text-sm text-slate-600">{data.notes}</p>
+                <div
+                  className="rich-text text-sm text-slate-600"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.notes) }}
+                />
               </div>
             )}
 

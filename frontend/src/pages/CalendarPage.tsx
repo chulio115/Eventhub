@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useEvents, type EventRow } from '../features/events/useEvents';
+import { sanitizeHtml } from '../lib/richText';
 
 function copyEventLink(eventId: string) {
   const url = `${window.location.origin}/events?id=${eventId}`;
@@ -394,9 +395,10 @@ export function CalendarPage() {
               )}
 
               {selectedEvent.notes && (
-                <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-                  {selectedEvent.notes}
-                </div>
+                <div
+                  className="rich-text rounded-lg bg-slate-50 p-3 text-sm text-slate-600"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedEvent.notes) }}
+                />
               )}
             </div>
 

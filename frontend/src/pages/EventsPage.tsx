@@ -12,6 +12,8 @@ import { useUploadEventFile } from '../features/events/useUploadEventFile';
 import { useDeleteHistoryEntry } from '../features/events/useDeleteHistoryEntry';
 import { useAuth } from '../features/auth/AuthContext';
 import { useUsers } from '../features/users/useUsers';
+import { RichTextEditor } from '../components/ui/RichTextEditor';
+import { htmlToPlainText, normalizeNotes } from '../lib/richText';
 
 function copyEventLink(eventId: string) {
   const url = `${window.location.origin}/events?id=${eventId}`;
@@ -57,7 +59,7 @@ function generateICS(event: EventRow): string {
     event.event_url ? `Website: ${event.event_url}` : '',
     '',
     `Im EventHub öffnen: ${eventHubLink}`,
-    event.notes ? `Notizen: ${event.notes.replace(/\n/g, ' ')}` : '',
+    event.notes ? `Notizen: ${htmlToPlainText(event.notes).replace(/\n/g, ' ')}` : '',
   ].filter((p) => p !== undefined);
   
   const description = descriptionParts.join('\\n');
@@ -134,7 +136,7 @@ function openOutlookWeb(event: EventRow) {
     `Veranstalter: ${event.organizer || 'N/A'}`,
     event.event_url ? `Website: ${event.event_url}` : '',
     `\nIm EventHub öffnen: ${eventHubLink}`,
-    event.notes ? `\nNotizen: ${event.notes}` : '',
+    event.notes ? `\nNotizen: ${htmlToPlainText(event.notes)}` : '',
   ].filter(Boolean).join('\n');
 
   const params = new URLSearchParams({
@@ -292,6 +294,7 @@ export function EventsPage() {
     }
   }, [events]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showPastEvents, setShowPastEvents] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
@@ -467,10 +470,22 @@ export function EventsPage() {
     return new Date(dateA).getTime() - new Date(dateB).getTime();
   });
 
+  // Kommende vs. vergangene Events (vergangen = Enddatum bzw. Startdatum liegt vor heute)
+  const todayKey = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in lokaler Zeit
+  const isPastEvent = (event: EventRow) => {
+    const lastDay = event.end_date ?? event.start_date;
+    return Boolean(lastDay && lastDay.slice(0, 10) < todayKey);
+  };
+  const upcomingEvents = filteredEvents.filter((e) => !isPastEvent(e));
+  // Vergangene: zuletzt stattgefundene zuerst
+  const pastEvents = filteredEvents.filter(isPastEvent).reverse();
+
   const effectiveSelectedId =
     selectedId && filteredEvents.some((e) => e.id === selectedId)
       ? selectedId
-      : filteredEvents[0]?.id ?? null;
+      : upcomingEvents[0]?.id ?? filteredEvents[0]?.id ?? null;
+
+  const selectedIsPast = pastEvents.some((e) => e.id === effectiveSelectedId);
 
   const selectedEvent: EventRow | undefined = events.find(
     (e) => e.id === effectiveSelectedId,
@@ -518,7 +533,7 @@ export function EventsPage() {
         draftCostType !== selectedEvent.cost_type ||
         draftCostNumeric !== (selectedEvent.cost_value ?? 0) ||
         draftEventUrl.trim() !== (selectedEvent.event_url ?? '') ||
-        draftNotes.trim() !== (selectedEvent.notes ?? '') ||
+        normalizeNotes(draftNotes) !== (selectedEvent.notes ?? '') ||
         draftVisitorNotes.trim() !== (selectedEvent.visitor_notes ?? '') ||
         Boolean(draftLinkedinNote.trim()) !== selectedEvent.linkedin_plan ||
         draftLinkedinNote.trim() !== (selectedEvent.linkedin_note ?? '') ||
@@ -756,7 +771,7 @@ export function EventsPage() {
 
     // Notizen & Besucher-Notizen
     if (
-      draftNotes.trim() !== (selectedEvent.notes ?? '') ||
+      normalizeNotes(draftNotes) !== (selectedEvent.notes ?? '') ||
       draftVisitorNotes.trim() !== (selectedEvent.visitor_notes ?? '')
     ) {
       changedNotes = true;
@@ -826,7 +841,7 @@ export function EventsPage() {
         cost_type: draftCostType,
         cost_value: costNumeric,
         event_url: draftEventUrl.trim() || null,
-        notes: draftNotes.trim() || null,
+        notes: normalizeNotes(draftNotes) || null,
         visitor_notes: draftVisitorNotes.trim() || null,
         attachments: attachmentsArray,
         linkedin_plan: linkedinPlanned,
@@ -898,6 +913,94 @@ export function EventsPage() {
     } catch {
       // Fehlerbehandlung später
     }
+  }
+
+  function renderEventRow(event: EventRow) {
+    const isSelected = selectedEvent?.id === event.id;
+    const uiStatus = mapToUiStatus(event.status, event.booked);
+
+    let statusLabel = '';
+    let statusClasses = '';
+
+    switch (uiStatus) {
+      case 'bewertung':
+        statusLabel = 'Bewertung';
+        statusClasses = 'border-amber-100 bg-amber-50 text-amber-700';
+        break;
+      case 'geplant':
+        statusLabel = 'Geplant';
+        statusClasses = 'border-sky-100 bg-sky-50 text-sky-700';
+        break;
+      case 'gebucht':
+        statusLabel = 'Gebucht';
+        statusClasses = 'border-emerald-200 bg-emerald-50 text-emerald-700';
+        break;
+      case 'abgesagt':
+        statusLabel = 'Abgesagt';
+        statusClasses = 'border-rose-100 bg-rose-50 text-rose-700';
+        break;
+      default:
+        statusLabel = '';
+        statusClasses = 'border-slate-200 bg-slate-100 text-slate-700';
+    }
+
+    const basePillClasses =
+      'inline-flex items-center rounded-full border px-3 py-0.5 text-xs font-semibold';
+
+    const colleaguesLabel = (event.colleagues || []).join(', ');
+    const metaLine = [colleaguesLabel, event.city, event.organizer]
+      .filter(Boolean)
+      .join(' · ');
+
+    const dateLabel = formatDate(event.start_date) || 'kein Datum';
+    const cityLabel = event.city ?? '';
+
+    return (
+      <button
+        key={event.id}
+        type="button"
+        onClick={() => setSelectedId(event.id)}
+        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+          isSelected
+            ? 'bg-slate-900 text-white hover:bg-slate-900'
+            : 'hover:bg-slate-50'
+        }`}
+      >
+        <div className="w-24 text-xs">
+          <div className={isSelected ? 'text-slate-300' : 'text-slate-500'}>
+            {dateLabel}
+          </div>
+          {cityLabel && (
+            <div className="mt-0.5 text-[11px] text-slate-400">{cityLabel}</div>
+          )}
+        </div>
+        <div className="flex-1">
+          <div
+            className={`font-medium ${
+              isSelected ? 'text-white' : 'text-slate-900'
+            }`}
+          >
+            {event.title}
+          </div>
+          <div
+            className={`text-xs ${
+              isSelected ? 'text-slate-300' : 'text-slate-500'
+            }`}
+          >
+            {metaLine}
+          </div>
+        </div>
+        {statusLabel && (
+          <span
+            className={`${basePillClasses} ${statusClasses} ${
+              isSelected ? 'ring-1 ring-white/40' : ''
+            }`}
+          >
+            {statusLabel}
+          </span>
+        )}
+      </button>
+    );
   }
 
   return (
@@ -1065,94 +1168,33 @@ export function EventsPage() {
                 Keine Events für die aktuellen Filter.
               </div>
             )}
-            {!isLoading && !error &&
-              filteredEvents.map((event) => {
-                const isSelected = selectedEvent?.id === event.id;
-                const uiStatus = mapToUiStatus(event.status, event.booked);
-
-                let statusLabel = '';
-                let statusClasses = '';
-
-                switch (uiStatus) {
-                  case 'bewertung':
-                    statusLabel = 'Bewertung';
-                    statusClasses = 'border-amber-100 bg-amber-50 text-amber-700';
-                    break;
-                  case 'geplant':
-                    statusLabel = 'Geplant';
-                    statusClasses = 'border-sky-100 bg-sky-50 text-sky-700';
-                    break;
-                  case 'gebucht':
-                    statusLabel = 'Gebucht';
-                    statusClasses = 'border-emerald-200 bg-emerald-50 text-emerald-700';
-                    break;
-                  case 'abgesagt':
-                    statusLabel = 'Abgesagt';
-                    statusClasses = 'border-rose-100 bg-rose-50 text-rose-700';
-                    break;
-                  default:
-                    statusLabel = '';
-                    statusClasses = 'border-slate-200 bg-slate-100 text-slate-700';
-                }
-
-                const basePillClasses =
-                  'inline-flex items-center rounded-full border px-3 py-0.5 text-xs font-semibold';
-
-                const colleaguesLabel = (event.colleagues || []).join(', ');
-                const metaLine = [colleaguesLabel, event.city, event.organizer]
-                  .filter(Boolean)
-                  .join(' · ');
-
-                const dateLabel = formatDate(event.start_date) || 'kein Datum';
-                const cityLabel = event.city ?? '';
-
-                return (
-                  <button
-                    key={event.id}
-                    type="button"
-                    onClick={() => setSelectedId(event.id)}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                      isSelected
-                        ? 'bg-slate-900 text-white hover:bg-slate-900'
-                        : 'hover:bg-slate-50'
-                    }`}
+            {!isLoading && !error && upcomingEvents.map(renderEventRow)}
+            {!isLoading && !error && filteredEvents.length > 0 && upcomingEvents.length === 0 && (
+              <div className="px-4 py-3 text-xs text-slate-400">Keine kommenden Events.</div>
+            )}
+            {!isLoading && !error && pastEvents.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowPastEvents((v) => !v)}
+                  aria-expanded={showPastEvents || selectedIsPast}
+                  className="flex w-full items-center justify-between bg-slate-50 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100"
+                >
+                  <span>Vergangene Events ({pastEvents.length})</span>
+                  <svg
+                    className={`h-4 w-4 transition-transform ${showPastEvents || selectedIsPast ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   >
-                    <div className="w-24 text-xs">
-                      <div className={isSelected ? 'text-slate-300' : 'text-slate-500'}>
-                        {dateLabel}
-                      </div>
-                      {cityLabel && (
-                        <div className="mt-0.5 text-[11px] text-slate-400">{cityLabel}</div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div
-                        className={`font-medium ${
-                          isSelected ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        {event.title}
-                      </div>
-                      <div
-                        className={`text-xs ${
-                          isSelected ? 'text-slate-300' : 'text-slate-500'
-                        }`}
-                      >
-                        {metaLine}
-                      </div>
-                    </div>
-                    {statusLabel && (
-                      <span
-                        className={`${basePillClasses} ${statusClasses} ${
-                          isSelected ? 'ring-1 ring-white/40' : ''
-                        }`}
-                      >
-                        {statusLabel}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {(showPastEvents || selectedIsPast) && (
+                  <div className="divide-y divide-slate-100 opacity-80">
+                    {pastEvents.map(renderEventRow)}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -1618,30 +1660,29 @@ export function EventsPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Besucher-Notizen */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                      <label className="mb-2.5 block text-xs font-semibold text-slate-600">Besucher-Notizen</label>
+                      <textarea
+                        className="h-32 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                        value={draftVisitorNotes}
+                        onChange={(e) => setDraftVisitorNotes(e.target.value)}
+                        placeholder="Notizen zu Besuchern, Kontakten..."
+                      />
+                    </div>
                   </div>
 
                   {/* Notizen & Historie über volle Breite */}
                     <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 md:col-span-2">
-                    {/* Notizen zweigeteilt */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">Notizen</label>
-                        <textarea
-                          className="h-32 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                          value={draftNotes}
-                          onChange={(e) => setDraftNotes(e.target.value)}
-                          placeholder="Allgemeine Notizen zum Event..."
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-700">Besucher-Notizen</label>
-                        <textarea
-                          className="h-32 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                          value={draftVisitorNotes}
-                          onChange={(e) => setDraftVisitorNotes(e.target.value)}
-                          placeholder="Notizen zu Besuchern, Kontakten..."
-                        />
-                      </div>
+                    {/* Notizen über volle Breite mit Texteditor */}
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">Notizen</label>
+                      <RichTextEditor
+                        value={draftNotes}
+                        onChange={setDraftNotes}
+                        placeholder="Allgemeine Notizen zum Event..."
+                      />
                     </div>
 
                     <div className="flex items-center justify-between gap-3 text-xs text-slate-700">
