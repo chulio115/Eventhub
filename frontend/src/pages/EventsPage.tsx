@@ -7,6 +7,7 @@ import { useEvents, type EventRow } from '../features/events/useEvents';
 import { useCreateEvent } from '../features/events/useCreateEvent';
 import { useUpdateEvent } from '../features/events/useUpdateEvent';
 import { useDeleteEvent } from '../features/events/useDeleteEvent';
+import { useDuplicateEvent } from '../features/events/useDuplicateEvent';
 import { useEventHistory, useAddHistoryEntry } from '../features/events/useEventHistory';
 import { useUploadEventFile } from '../features/events/useUploadEventFile';
 import { useDeleteHistoryEntry } from '../features/events/useDeleteHistoryEntry';
@@ -497,6 +498,24 @@ export function EventsPage() {
   } = useEventHistory(effectiveSelectedId ?? null);
 
   const addHistory = useAddHistoryEntry();
+  const duplicateEvent = useDuplicateEvent();
+
+  async function handleDuplicateEvent() {
+    if (!selectedEvent || duplicateEvent.isPending) return;
+    const source = selectedEvent;
+    try {
+      const created = await duplicateEvent.mutateAsync(source);
+      const sourceDate = formatDate(source.start_date);
+      addHistory.mutate({
+        eventId: created.id,
+        action: `Dupliziert von „${source.title}“${sourceDate ? ` (${sourceDate})` : ''}`,
+        userEmail: profile?.email,
+      });
+      setSelectedId(created.id);
+    } catch {
+      // Fehlermeldung kommt per Toast aus dem Hook
+    }
+  }
   const deleteHistory = useDeleteHistoryEntry();
   const uploadFile = useUploadEventFile();
 
@@ -1348,6 +1367,19 @@ export function EventsPage() {
                       </div>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleDuplicateEvent}
+                    disabled={duplicateEvent.isPending}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50"
+                    title="Event duplizieren (für das nächste Jahr)"
+                    aria-label="Event duplizieren"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(selectedEvent.id)}
