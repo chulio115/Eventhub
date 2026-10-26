@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabaseClient';
+import { isMissingColumnError } from '../../lib/eventTime';
 
 export type EventStatus = 'planned' | 'consider' | 'attended' | 'cancelled';
 export type CostType = 'participant' | 'booth' | 'sponsoring';
@@ -32,52 +33,59 @@ export interface EventRow {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  /** Nur vorhanden, wenn die Spalten start_time/end_time in der Datenbank angelegt sind. */
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 export function useEvents() {
   return useQuery<EventRow[], Error>({
     queryKey: ['events'],
     queryFn: async (): Promise<EventRow[]> => {
-      const { data, error } = await supabase
-        .from('events')
-        .select(
-          [
-            'id',
-            'title',
-            'organizer',
-            'start_date',
-            'end_date',
-            'city',
-            'location',
-            'status',
-            'booked',
-            'colleagues',
-            'tags',
-            'cost_type',
-            'cost_value',
-            'event_url',
-            'notes',
-            'visitor_notes',
-            'attachments',
-            'linkedin_plan',
-            'linkedin_note',
-            'publication_status',
-            'rating_sales',
-            'rating_kam',
-            'rating_marketing',
-            'rating_clevel',
-            'contact_name',
-            'contact_email',
-            'contact_phone',
-          ].join(', '),
-        )
-        .order('start_date', { ascending: true });
+      const baseColumns = [
+        'id',
+        'title',
+        'organizer',
+        'start_date',
+        'end_date',
+        'city',
+        'location',
+        'status',
+        'booked',
+        'colleagues',
+        'tags',
+        'cost_type',
+        'cost_value',
+        'event_url',
+        'notes',
+        'visitor_notes',
+        'attachments',
+        'linkedin_plan',
+        'linkedin_note',
+        'publication_status',
+        'rating_sales',
+        'rating_kam',
+        'rating_marketing',
+        'rating_clevel',
+        'contact_name',
+        'contact_email',
+        'contact_phone',
+      ];
+
+      const load = (columns: string[]) =>
+        supabase.from('events').select(columns.join(', ')).order('start_date', { ascending: true });
+
+      // Uhrzeiten mitladen; falls die Spalten noch fehlen, ohne sie weitermachen
+      let { data, error } = await load([...baseColumns, 'start_time', 'end_time']);
+      if (isMissingColumnError(error)) {
+        ({ data, error } = await load(baseColumns));
+      }
 
       if (error) {
         throw error as Error;
       }
 
-      return (data ?? []) as EventRow[];
+      return (data ?? []) as unknown as EventRow[];
     },
   });
 }
